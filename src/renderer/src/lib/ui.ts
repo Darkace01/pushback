@@ -22,6 +22,7 @@ export type ModalState =
   | { kind: 'import-dashboard' }
   | { kind: 'saved-searches' }
   | { kind: 'find-clones' }
+  | { kind: 'discussion'; repo: string; number: number }
   | null
 
 let modal: ModalState = null
@@ -58,7 +59,7 @@ export const closeModal = () => {
 export const useModal = () => useSyncExternalStore(subscribe, () => modal)
 
 /** Views that open as a sub-page in the main area (with breadcrumbs) rather than as a dialog. */
-const PAGES = new Set(['pr', 'issue', 'run'])
+const PAGES = new Set(['pr', 'issue', 'run', 'discussion'])
 export const isPage = (m: ModalState): boolean => !!m && PAGES.has(m.kind)
 
 /** Every open view, root first. */

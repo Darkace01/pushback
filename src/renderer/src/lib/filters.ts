@@ -75,6 +75,7 @@ export const OPTIONS: Partial<Record<WidgetType, OptionSpec[]>> = {
     { key: 'repo', label: 'Repo or org', kind: 'text', filter: true, placeholder: 'any repo' },
     { key: 'author', label: 'Author', kind: 'text', filter: true, placeholder: 'anyone' },
     { key: 'label', label: 'Label', kind: 'text', filter: true, placeholder: 'any label' },
+    { key: 'milestone', label: 'Milestone', kind: 'text', filter: true, placeholder: 'any milestone' },
     { key: 'hideDrafts', label: 'Hide drafts', kind: 'bool', filter: true }
   ],
   deployments: [

@@ -3,18 +3,20 @@ import { closeModal, isPage, popTo, useModal, useTrail } from '../lib/ui'
 import { getSnapshot, useSettings } from '../lib/store'
 import { HOME, openRepoTab, useRepoSection } from '../lib/tabs'
 import { RunDetailsModal } from './ActionModals'
+import { DiscussionModal } from './DiscussionView'
 import { IssueModal } from './IssueView'
 import { PrModal } from './PrView'
 import { SECTIONS } from './RepoWorkspace'
 import { Icon, PageMode } from './ui'
 
-type Page = NonNullable<ModalState> & ({ kind: 'pr' } | { kind: 'issue' } | { kind: 'run' })
+type Page = NonNullable<ModalState> & ({ kind: 'pr' } | { kind: 'issue' } | { kind: 'run' } | { kind: 'discussion' })
 
 const pageRepo = (p: Page) => (p.kind === 'run' ? p.run.repo : p.repo)
 
 function pageLabel(p: Page): string {
   if (p.kind === 'run') return `${p.run.name} #${p.run.runNumber}`
   if (p.kind === 'issue') return `Issue #${p.number}`
+  if (p.kind === 'discussion') return `Discussion #${p.number}`
   const title = getSnapshot().repos[p.repo]?.prs.find((x) => x.number === p.number)?.title
   return `#${p.number}${title ? ` ${title}` : ''}`
 }
@@ -91,6 +93,8 @@ export function PageArea({ inRepo }: { inRepo?: string }) {
       <PrModal key={`${page.repo}#${page.number}`} repo={page.repo} number={page.number} />
     ) : page.kind === 'issue' ? (
       <IssueModal key={`${page.repo}#${page.number}`} repo={page.repo} number={page.number} />
+    ) : page.kind === 'discussion' ? (
+      <DiscussionModal key={`${page.repo}#${page.number}`} repo={page.repo} number={page.number} />
     ) : (
       <RunDetailsModal key={page.run.id} run={page.run} />
     )

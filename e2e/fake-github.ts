@@ -116,12 +116,101 @@ const deployment = (id: number, environment: string, runId: number, sha: string,
   latestStatus: { state: state === 'FAILURE' ? 'FAILURE' : 'SUCCESS', createdAt: ago(minutes - 1), logUrl: `https://github.com/acme/api/actions/runs/${runId}/job/1`, environmentUrl: '', description: '' }
 })
 
+const category = (id: string, name: string, isAnswerable: boolean) => ({ id, name, isAnswerable })
+const QA = category('DIC_qa', 'Q&A', true)
+const IDEAS = category('DIC_ideas', 'Ideas', false)
+const discussion = (number: number, title: string, cat: object, over: object = {}) => ({
+  number,
+  title,
+  url: `https://github.com/acme/api/discussions/${number}`,
+  createdAt: ago(3000),
+  updatedAt: ago(number * 10),
+  upvoteCount: 2,
+  closed: false,
+  isAnswered: false,
+  author: { login: 'dana', avatarUrl: '' },
+  category: cat,
+  comments: { totalCount: 0 },
+  ...over
+})
+const DISCUSSIONS = [
+  discussion(5, 'How do I configure SSO?', QA, { isAnswered: true, comments: { totalCount: 2 } }),
+  discussion(6, 'Webhooks time out', QA),
+  discussion(7, 'Idea: a CLI', IDEAS, { upvoteCount: 9 })
+]
+
+function discussionsOf(repo: string) {
+  if (repo !== 'acme/api') return { hasDiscussionsEnabled: false, discussionCategories: { nodes: [] }, discussions: { nodes: [] } }
+  return { hasDiscussionsEnabled: true, discussionCategories: { nodes: [QA, IDEAS] }, discussions: { nodes: DISCUSSIONS } }
+}
+
+const reply = (id: string, login: string, html: string, over: object = {}) => ({ id, url: '', bodyHTML: html, createdAt: ago(100), author: { login, avatarUrl: '' }, ...over })
+const DISCUSSION_DETAIL: Record<number, object> = {
+  5: {
+    ...DISCUSSIONS[0],
+    id: 'D_kwDO5',
+    locked: false,
+    bodyHTML: '<p>We use <strong>Okta</strong>. Where does the SSO config go?</p>',
+    comments: {
+      totalCount: 2,
+      nodes: [
+        reply('DC_1', 'octo', '<p>Set <code>SSO_URL</code> in the config file.</p>', { isAnswer: true, replies: { nodes: [reply('DC_2', 'dana', '<p>That worked, thanks!</p>')] } }),
+        reply('DC_3', 'bob', '<p>Docs are in the wiki too.</p>', { isAnswer: false, replies: { nodes: [] } })
+      ]
+    }
+  }
+}
+
+const statusField = { id: 'PVTSSF_status', options: [{ id: 'opt_todo', name: 'Todo', color: 'GRAY' }, { id: 'opt_doing', name: 'In progress', color: 'YELLOW' }, { id: 'opt_done', name: 'Done', color: 'GREEN' }] }
+const PROJECT_ITEMS = [
+  { id: 'PVTI_1', isArchived: false, project: { id: 'PVT_roadmap', title: 'Roadmap', number: 1, url: 'https://github.com/orgs/acme/projects/1', closed: false, field: statusField }, fieldValueByName: { optionId: 'opt_doing' } },
+  { id: 'PVTI_2', isArchived: true, project: { id: 'PVT_old', title: 'Old board', number: 2, url: '', closed: true, field: null }, fieldValueByName: null }
+]
+
+const milestone = (number: number, title: string, state: string, open: number, closed: number, dueDays: number | null, over: object = {}) => ({
+  number,
+  title,
+  description: null,
+  state,
+  open_issues: open,
+  closed_issues: closed,
+  due_on: dueDays === null ? null : new Date(now + dueDays * 86_400_000).toISOString(),
+  closed_at: null,
+  html_url: `https://github.com/acme/api/milestone/${number}`,
+  ...over
+})
+const MILESTONES = [
+  milestone(2, 'Backlog', 'open', 1, 0, null),
+  milestone(1, 'v1.3', 'open', 2, 3, 5, { description: 'Login and SSO' }),
+  milestone(3, 'v1.2', 'closed', 0, 4, -30, { closed_at: ago(3000) })
+]
+const issue = (number: number, title: string, ms: { number: number; title: string } | null) => ({
+  number,
+  title,
+  html_url: `https://github.com/acme/api/issues/${number}`,
+  state: 'open',
+  state_reason: null,
+  user: user('dana'),
+  created_at: ago(2000),
+  updated_at: ago(number),
+  comments: 0,
+  labels: [],
+  assignees: [],
+  milestone: ms,
+  body_html: `<p>See <a href="https://github.com/acme/api/discussions/5">the SSO discussion</a>.</p>`
+})
+const ISSUES = [issue(11, 'Login fails on Safari', { number: 1, title: 'v1.3' }), issue(12, 'Docs typo', null), issue(13, 'Add dark mode', { number: 2, title: 'Backlog' })]
+
 function graphql(query: string, vars: Record<string, string>, rich: boolean) {
   if (query.includes('reviewRequests: search')) {
     const node = { ...pr(7, {}), repository: { nameWithOwner: 'acme/api' } }
     return { viewer: { login: 'octo', avatarUrl: '' }, reviewRequests: { nodes: [node] }, myPrs: { nodes: [] }, assigned: { nodes: [] } }
   }
   const repo = `${vars.owner}/${vars.name}`
+  // Discussions, milestones' sibling features and Projects (v2): acme/api has them, acme/web has discussions turned off.
+  if (query.includes('hasDiscussionsEnabled')) return { repository: discussionsOf(repo) }
+  if (query.includes('discussion(number')) return { repository: { discussion: repo === 'acme/api' ? DISCUSSION_DETAIL[Number(vars.number)] ?? null : null } }
+  if (query.includes('projectItems')) return { repository: { issueOrPullRequest: { projectItems: { nodes: repo === 'acme/api' && Number(vars.number) === 11 ? PROJECT_ITEMS : [] } } } }
   if (query.includes('refs/heads/')) {
     const days = (n: number) => ago(n * 1440)
     const branch = (name: string, age: number, aheadBy: number, behindBy: number, pr?: number) => ({
@@ -264,6 +353,17 @@ function rest(path: string, rich: boolean, enterprise = false): unknown {
       ]
     return [{ number: 5, html_url: 'https://github.com/acme/api/security/code-scanning/5', created_at: ago(100), rule: { id: 'js/sql-injection', description: 'SQL injection', severity: 'error', security_severity_level: 'critical' }, most_recent_instance: { location: { path: 'src/db.ts' } } }]
   }
+  if ((m = p.match(/^\/repos\/acme\/api\/milestones$/))) {
+    const state = new URLSearchParams(path.split('?')[1] ?? '').get('state') ?? 'open'
+    return MILESTONES.filter((x) => x.state === state)
+  }
+  if ((m = p.match(/^\/repos\/acme\/api\/issues$/))) {
+    const q = new URLSearchParams(path.split('?')[1] ?? '')
+    if (q.get('state') === 'closed') return []
+    const ms = q.get('milestone')
+    return ISSUES.filter((i) => !ms || (ms === 'none' ? !i.milestone : String(i.milestone?.number) === ms))
+  }
+  if ((m = p.match(/^\/repos\/acme\/api\/issues\/(\d+)$/))) return ISSUES.find((i) => i.number === Number(m![1]))
   // Open PRs for the cleanup view (and the "does this branch have a PR" check before deleting it).
   // (Closed PRs, asked for by the release-notes draft, are served further down.)
   if ((m = p.match(/^\/repos\/([^/]+\/[^/]+)\/pulls$/)) && !/[?&]state=closed(&|$)/.test(path)) {

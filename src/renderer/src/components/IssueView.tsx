@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { MilestoneRef } from '../../../shared/types'
 import { timeAgo, useNow } from '../lib/format'
 import { webUrl } from '../lib/hosts'
 import { openRepo } from '../lib/open'
@@ -6,6 +7,7 @@ import { api, toast } from '../lib/store'
 import { closeModal } from '../lib/ui'
 import { invalidate, useLoad } from '../lib/useLoad'
 import { Markdown } from './Markdown'
+import { ProjectsPanel } from './Projects'
 import { RepoRail } from './RepoRail'
 import { Avatar, Modal, Skeleton } from './ui'
 
@@ -64,6 +66,8 @@ export function IssueModal({ repo, number }: { repo: string; number: number }) {
             ))}
           </div>
         )}
+        {issue && <MilestonePicker repo={repo} number={number} current={issue.milestone ?? null} />}
+        <ProjectsPanel repo={repo} number={number} />
       </div>
 
       <div className="inline">
@@ -137,5 +141,36 @@ export function IssueModal({ repo, number }: { repo: string; number: number }) {
         </div>
       )}
     </Modal>
+  )
+}
+
+/** Shows the issue's milestone and moves it to another one (or out of any). */
+function MilestonePicker({ repo, number, current }: { repo: string; number: number; current: MilestoneRef | null }) {
+  const { data: open } = useLoad(repo, () => api.listMilestones(repo, 'open'), [])
+  const [busy, setBusy] = useState(false)
+  // The current milestone may be closed, so it isn't always in the open list.
+  const choices = [...(open ?? []), ...(current && !open?.some((m) => m.number === current.number) ? [current] : [])]
+
+  const set = async (milestone: number | null) => {
+    setBusy(true)
+    const r = await api.setIssueMilestone(repo, number, milestone)
+    setBusy(false)
+    if (!r.ok) return toast(`Couldn't change the milestone: ${r.error}`, 'error')
+    toast(milestone === null ? `Removed #${number} from its milestone` : `Moved #${number} to ${choices.find((m) => m.number === milestone)?.title}`, 'ok')
+    invalidate(repo)
+  }
+
+  return (
+    <label className="inline small">
+      <span className="dim">Milestone</span>
+      <select aria-label="Milestone" disabled={busy} value={current?.number ?? ''} onChange={(e) => void set(e.target.value ? Number(e.target.value) : null)}>
+        <option value="">No milestone</option>
+        {choices.map((m) => (
+          <option key={m.number} value={m.number}>
+            {m.title}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }
