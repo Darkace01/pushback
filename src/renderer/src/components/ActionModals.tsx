@@ -216,6 +216,7 @@ export function RunDetailsModal({ run: initial }: { run: WorkflowRun }) {
   }, [run.repo, run.id, active, run.attempt])
 
   const tone = runTone(run)
+  const workflow = snapshot.repos[run.repo]?.workflows.find((w) => w.id === run.workflowId)
   return (
     <Modal title={`${run.name} #${run.runNumber}`} onClose={closeModal} width={760} side={<RepoRail repo={run.repo} />}>
       <div className="account">
@@ -251,6 +252,11 @@ export function RunDetailsModal({ run: initial }: { run: WorkflowRun }) {
           </button>
         )}
         <span className="spacer" />
+        {workflow?.path.startsWith('.github/workflows/') && (
+          <button className="btn" onClick={() => pushModal({ kind: 'workflow-file', repo: run.repo, path: workflow.path, ref: run.sha, name: workflow.name })}>
+            View workflow file
+          </button>
+        )}
         <button className="btn" onClick={() => void navigator.clipboard.writeText(run.url).then(() => toast('Link copied', 'ok'))}>
           Copy link
         </button>

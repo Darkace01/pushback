@@ -52,6 +52,21 @@ on:
         options: [dev, prod-acme]
 `
 
+/** CI's workflow file: push to main (not for docs-only changes) and every pull request. */
+export const CI_YAML = `name: CI
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**']
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest # the usual
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "\${{ github.sha }}"
+`
+
 const pr = (number: number, over: object) => ({
   number,
   title: 'Add login page',
@@ -227,6 +242,38 @@ function graphql(query: string, vars: Record<string, string>, rich: boolean) {
         }
       }
     }
+  // Merge queues: acme/web queues PRs into main (PR 9 is second, matching its merge status); other repos have none.
+  if (query.includes('mergeQueue(')) {
+    if (repo !== 'acme/web') return { repository: { defaultBranchRef: { name: 'main' }, mergeQueue: null } }
+    const entry = (position: number, number: number, title: string, state: string, author: string, eta: number | null) => ({
+      position,
+      state,
+      enqueuedAt: ago(30 - position * 5),
+      estimatedTimeToMerge: eta,
+      solo: false,
+      jump: position === 1,
+      enqueuer: { login: 'bob' },
+      headCommit: { oid: String(position).repeat(40) },
+      pullRequest: { number, title, url: `https://github.com/acme/web/pull/${number}`, author: { login: author, avatarUrl: '' } }
+    })
+    return {
+      repository: {
+        defaultBranchRef: { name: 'main' },
+        mergeQueue: {
+          url: 'https://github.com/acme/web/queue/main',
+          configuration: { mergeMethod: 'SQUASH', mergingStrategy: 'ALLGREEN', maximumEntriesToBuild: 5 },
+          entries: {
+            totalCount: 3,
+            nodes: [
+              entry(1, 12, 'Fix header layout', 'MERGEABLE', 'carol', 60),
+              entry(2, 9, 'Bump lodash from 4.17.20 to 4.17.21', 'AWAITING_CHECKS', 'dependabot', 300),
+              entry(3, 14, 'Add dark mode toggle', 'UNMERGEABLE', 'alice', null)
+            ]
+          }
+        }
+      }
+    }
+  }
   if (query.includes('pullRequests(')) return { repository: { defaultBranchRef: { name: 'main' }, pullRequests: { nodes: [...(PRS[repo] ?? []), ...(rich ? (RICH_PRS[repo] ?? []) : [])] } } }
   return { repository: null }
 }
@@ -284,7 +331,11 @@ function rest(path: string, rich: boolean, enterprise = false): unknown {
           : []
     }
   if (p.endsWith('/contents/.github/workflows/deploy.yml')) return { content: Buffer.from(DEPLOY_YAML).toString('base64') }
-  if (p.endsWith('/contents/.github/workflows/ci.yml')) return { content: Buffer.from('on: push\n').toString('base64') }
+  if (p.endsWith('/contents/.github/workflows/ci.yml'))
+    return { content: Buffer.from(CI_YAML).toString('base64'), html_url: 'https://github.com/acme/api/blob/main/.github/workflows/ci.yml' }
+  // The workflows API by file name, which the workflow file viewer reads for the workflow's state.
+  if ((m = p.match(/^\/repos\/acme\/api\/actions\/workflows\/(ci|deploy)\.yml$/)))
+    return { id: m[1] === 'ci' ? 1 : 2, name: m[1] === 'ci' ? 'CI' : 'Deploy', path: `.github/workflows/${m[1]}.yml`, state: 'active', html_url: '' }
   if ((m = p.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/jobs$/)))
     return {
       jobs: [

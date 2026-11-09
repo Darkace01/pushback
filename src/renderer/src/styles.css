@@ -3234,3 +3234,120 @@ button.crumb:hover {
 .cleanup-failures {
   margin-top: 10px;
 }
+
+/* ---------- merge queue ---------- */
+.queue-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.queue-head {
+  margin-bottom: 8px;
+}
+.queue-pos {
+  min-width: 22px;
+  text-align: center;
+  font: 600 12px var(--mono);
+  color: var(--dim);
+}
+
+/* ---------- workflow file viewer ---------- */
+.triggers h4,
+.why-not h4 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+.triggers ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.why-not {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 12px 10px;
+  margin: 10px 0;
+}
+.why-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: flex-end;
+}
+.why-form label:not(.why-tag) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.why-form .why-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+.why-form .why-tag input {
+  width: auto;
+  margin: 0;
+}
+.why-form .why-wide {
+  flex: 1 1 100%;
+}
+.why-form textarea,
+.why-form input:not([type='checkbox']) {
+  font-family: var(--mono);
+}
+.why-verdict {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.why-verdict ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.why-verdict p {
+  margin: 2px 0;
+}
+.code-view {
+  margin: 10px 0 0;
+  padding: 8px 0;
+  overflow: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: 12px/1.55 var(--mono);
+}
+.code-line {
+  display: flex;
+}
+.code-line .ln {
+  flex: none;
+  width: 44px;
+  padding-right: 12px;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
+.code-line code {
+  font: inherit;
+  white-space: pre;
+}
+.tok-key {
+  color: var(--accent);
+}
+.tok-string {
+  color: var(--ok);
+}
+.tok-expr {
+  color: var(--warn);
+}
+.tok-comment {
+  color: var(--muted);
+  font-style: italic;
+}
+.tok-literal {
+  color: var(--bad);
+}
+.tok-punct {
+  color: var(--dim);
+}

@@ -20,6 +20,7 @@ import { DeploymentsSection } from './Deployments'
 import { CollapsibleFilterBar } from './FilterBar'
 import { LocalSection } from './LocalGit'
 import { Markdown } from './Markdown'
+import { MergeQueueSection } from './MergeQueue'
 import { Empty, runTone, Skeleton, StatusIcon } from './ui'
 
 export interface SectionProps {
@@ -52,6 +53,7 @@ function Overview({ repo, info }: SectionProps) {
 export const SECTIONS: Section[] = [
   { id: 'overview', label: 'Overview', group: 'GitHub', component: Overview },
   { id: 'pulls', label: 'Pull requests', group: 'GitHub', widget: ['prs', PrsWidget] },
+  { id: 'merge-queue', label: 'Merge queue', group: 'GitHub', component: MergeQueueSection },
   { id: 'issues', label: 'Issues', group: 'GitHub', component: IssuesSection },
   { id: 'branches', label: 'Branches', group: 'GitHub', component: BranchesSection },
   { id: 'commits', label: 'Commits', group: 'GitHub', component: CommitsSection },

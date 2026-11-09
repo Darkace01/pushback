@@ -85,7 +85,11 @@ const api: PushbackApi = {
   listPackages: (owner) => ipcRenderer.invoke('packages:list', owner),
   listPackageOrgs: () => ipcRenderer.invoke('packages:orgs'),
   packageVersions: (owner, type, name) => ipcRenderer.invoke('packages:versions', owner, type, name),
-  onNavigate: (cb) => subscribe<string>('navigate', cb)
+  onNavigate: (cb) => subscribe<string>('navigate', cb),
+  // --- merge queue ---
+  mergeQueue: (repo, branch) => ipcRenderer.invoke('merge-queue:get', repo, branch),
+  // --- workflow files ---
+  workflowFile: (repo, path, ref) => ipcRenderer.invoke('workflow:file', repo, path, ref)
 }
 
 contextBridge.exposeInMainWorld('pushback', api)

@@ -15,6 +15,8 @@ import { listDeployments } from './deployments'
 import { listSecurity } from './security'
 import { listPackageOrgs, listPackages, packageVersions } from './packages'
 import { fetchMergeStatus } from './mergeStatus'
+import { fetchMergeQueue } from './mergeQueue'
+import { fetchWorkflowFile } from './workflowFile'
 import { AccountClients, hasAccountToken, saveAccountToken } from './accounts'
 import { accountOf, apiUrlFor, hostOf, normalizeHost, reposOfAccount, GITHUB_HOST } from '../shared/accounts'
 import { applyCleanup, listOpenPrs } from './cleanup'
@@ -745,6 +747,10 @@ function registerIpc(): void {
     quitting = true
     installUpdate()
   })
+  // --- merge queue ---
+  ipcMain.handle('merge-queue:get', (_e, repo: string, branch?: string) => fetchMergeQueue(clientFor(repo), repo, branch ? String(branch) : undefined))
+  // --- workflow files ---
+  ipcMain.handle('workflow:file', (_e, repo: string, path: string, ref?: string) => fetchWorkflowFile(clientFor(repo), repo, String(path), ref ? String(ref) : undefined))
 }
 
 // A throwaway profile for the end-to-end tests. Set before the single-instance lock, which is keyed on the

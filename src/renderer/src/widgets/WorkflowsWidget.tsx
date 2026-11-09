@@ -49,6 +49,11 @@ export const WorkflowsWidget = memo(function WorkflowsWidget({ widget, filter }:
                         ▶ Run
                       </button>
                     )}
+                    {w.path.startsWith('.github/workflows/') && (
+                      <button className="btn btn-sm" title="View the workflow file and its triggers" onClick={() => pushModal({ kind: 'workflow-file', repo, path: w.path, name: w.name })}>
+                        View file
+                      </button>
+                    )}
                     <IconButton icon="external" title="Open on GitHub" onClick={() => void api.openExternal(w.url)} />
                   </div>
                 </li>
