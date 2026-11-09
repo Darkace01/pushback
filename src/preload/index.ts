@@ -98,6 +98,9 @@ const api: PushbackApi = {
   resolveThread: (repo, threadId, resolved) => ipcRenderer.invoke('pr:resolve-thread', repo, threadId, resolved),
   // --- GitHub notifications ---
   readNotifications: (threadId) => ipcRenderer.invoke('notifications:read', threadId),
+  // --- Actions settings ---
+  actionsAdmin: (repo, kind) => ipcRenderer.invoke('actions-admin:list', repo, kind),
+  actionsAdminAct: (repo, action) => ipcRenderer.invoke('actions-admin:act', repo, action),
   onNavigate: (cb) => subscribe<string>('navigate', cb)
 }
 

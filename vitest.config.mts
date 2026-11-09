@@ -27,6 +27,8 @@ export default defineConfig({
         'src/main/cleanup.ts',
         'src/shared/mergeStatus.ts',
         'src/main/mergeStatus.ts',
+        'src/main/actionsAdmin.ts',
+        'src/shared/actionsAdmin.ts',
         'src/renderer/src/lib/graph.ts',
         'src/renderer/src/lib/filters.ts'
       ],

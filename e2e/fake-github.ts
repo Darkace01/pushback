@@ -317,6 +317,20 @@ function rest(path: string, rich: boolean, enterprise = false, waiting = false):
     ]
   }
   if (p === '/user/orgs') return [{ login: 'acme' }]
+  // Actions settings: acme/api has secrets, variables, a runner and caches; acme/web's token isn't an admin (403).
+  if ((m = p.match(/^\/repos\/([^/]+\/[^/]+)\/actions\/(secrets|secrets\/public-key|variables|runners|caches|cache\/usage)$/))) {
+    if (m[1] !== 'acme/api') return { status: 403, body: { message: 'Resource not accessible by personal access token' } }
+    if (m[2] === 'secrets') return { total_count: 2, secrets: [{ name: 'NPM_TOKEN', created_at: ago(9000), updated_at: ago(120) }, { name: 'DEPLOY_KEY', created_at: ago(9000), updated_at: ago(4000) }] }
+    // Any 32 bytes make a usable X25519 public key for sealing.
+    if (m[2] === 'secrets/public-key') return { key_id: 'key-1', key: Buffer.alloc(32, 7).toString('base64') }
+    if (m[2] === 'variables') return { total_count: 1, variables: [{ name: 'NODE_VERSION', value: '22', created_at: ago(9000), updated_at: ago(300) }] }
+    if (m[2] === 'runners') return { total_count: 1, runners: [{ id: 1, name: 'build-box', os: 'Linux', status: 'online', busy: true, labels: [{ name: 'self-hosted' }, { name: 'gpu' }] }] }
+    if (m[2] === 'cache/usage') return { full_name: m[1], active_caches_size_in_bytes: 3 * 1024 * 1024 * 1024, active_caches_count: 3 }
+    const ref = new URLSearchParams(path.split('?')[1] ?? '').get('ref')
+    const cache = (id: number, key: string, cref: string, gb: number) => ({ id, key, ref: cref, size_in_bytes: gb * 1024 * 1024 * 1024, last_accessed_at: ago(id * 10), created_at: ago(id * 100) })
+    const caches = [cache(1, 'node-modules-linux-abc', 'refs/heads/main', 1), cache(2, 'node-modules-linux-def', 'refs/pull/7/merge', 1), cache(3, 'playwright-linux', 'refs/pull/7/merge', 1)].filter((c) => !ref || c.ref === ref)
+    return { total_count: caches.length, actions_caches: caches }
+  }
   // Security alerts: acme/api has some, secret scanning is off there; acme/web has the features switched off.
   if ((m = p.match(/^\/repos\/([^/]+\/[^/]+)\/(dependabot|code-scanning|secret-scanning)\/alerts$/))) {
     if (m[1] !== 'acme/api' || m[2] === 'secret-scanning') return { status: 404, body: { message: 'Not Found' } }
@@ -537,6 +551,10 @@ export async function startFakeGitHub(opts: { rich?: boolean; enterprise?: boole
     if (req.method === 'GET' && /^\/repos\/[^/]+\/[^/]+\/actions\/artifacts\/\d+\/zip$/.test(path)) {
       res.writeHead(200, { ...headers, 'Content-Type': 'application/zip' }).end(Buffer.from('PK fake zip'))
       return
+    }
+    if (req.method === 'PUT' && /^\/repos\/[^/]+\/[^/]+\/actions\/secrets\/\w+$/.test(path)) {
+      bodies.push({ method: 'PUT', path, body: JSON.parse(text || '{}') })
+      return void res.writeHead(201, headers).end('{}')
     }
     // Writes (cleanup) are accepted and recorded; tests assert on exactly which ones happened.
     if (req.method === 'DELETE') return void res.writeHead(204, headers).end()

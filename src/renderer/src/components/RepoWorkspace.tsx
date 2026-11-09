@@ -13,6 +13,7 @@ import { RunsWidget } from '../widgets/RunsWidget'
 import type { WidgetProps } from '../widgets/types'
 import { SecurityWidget } from '../widgets/SecurityWidget'
 import { WorkflowsWidget } from '../widgets/WorkflowsWidget'
+import { ActionsSettingsSection } from './ActionsSettings'
 import { CleanupSection } from './Cleanup'
 import { BranchesSection, CommitsSection, IssuesSection, ReleasesSection } from './GitHubSections'
 import { CompareSection, ContributorsSection, FileHistorySection, GraphSection, RemotesSection, SearchSection, StashesSection, TagsSection } from './GitTools'
@@ -63,6 +64,7 @@ export const SECTIONS: Section[] = [
   { id: 'insights', label: 'Insights', group: 'Actions', widget: ['insights', InsightsWidget] },
   { id: 'cihealth', label: 'CI health', group: 'Actions', widget: ['cihealth', CiHealthWidget] },
   { id: 'deployments', label: 'Deployments', group: 'Actions', component: DeploymentsSection },
+  { id: 'actions-settings', label: 'Actions settings', group: 'Actions', component: ActionsSettingsSection },
   { id: 'local', label: 'Working copy', group: 'Local', component: LocalSection },
   { id: 'graph', label: 'Commit graph', group: 'Local', component: GraphSection },
   { id: 'file-history', label: 'File history & blame', group: 'Local', component: FileHistorySection },
