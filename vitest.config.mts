@@ -28,7 +28,11 @@ export default defineConfig({
         'src/shared/mergeStatus.ts',
         'src/main/mergeStatus.ts',
         'src/renderer/src/lib/graph.ts',
-        'src/renderer/src/lib/filters.ts'
+        'src/renderer/src/lib/filters.ts',
+        'src/shared/workflowTriggers.ts',
+        'src/shared/mergeQueue.ts',
+        'src/main/mergeQueue.ts',
+        'src/renderer/src/lib/yamlHighlight.ts'
       ],
       reporter: ['text', 'html'],
       // Fail the run if coverage of the tested modules drops.
