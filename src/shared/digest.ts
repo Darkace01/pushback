@@ -8,6 +8,7 @@ export const DEFAULT_DIGEST: DigestSettings = { afterQuiet: false, daily: false,
 
 /** How each kind of event is counted, as [singular, plural] phrases, in the order they're listed. */
 const PHRASES: [EventKind, string, string][] = [
+  ['deploy-approval', 'deployment needs your approval', 'deployments need your approval'],
   ['run-failure', 'run failed', 'runs failed'],
   ['pr-checks-failed', 'PR has failing checks', 'PRs have failing checks'],
   ['pr-review', 'PR needs your review', 'PRs need your review'],
