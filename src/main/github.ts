@@ -152,6 +152,22 @@ export class GitHub {
   }
 
   async graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const json = await this.graphqlRaw<T>(query, variables)
+    // Partial data is still useful (e.g. one repo of many was renamed), so only fail with no data.
+    if (!json.data) throw new GitHubError(json.errors?.map((e) => e.message).join('; ') ?? 'GraphQL error', 200)
+    return json.data
+  }
+
+  /**
+   * Like `graphql`, but also hands back the errors that came with partial data. A token missing a scope (e.g.
+   * `read:project`) gets data with that field nulled plus an INSUFFICIENT_SCOPES error, which callers want to explain.
+   */
+  async graphqlPartial<T>(query: string, variables: Record<string, unknown>): Promise<{ data?: T; errors: GraphqlError[] }> {
+    const json = await this.graphqlRaw<T>(query, variables)
+    return { data: json.data, errors: json.errors ?? [] }
+  }
+
+  private async graphqlRaw<T>(query: string, variables: Record<string, unknown>): Promise<{ data?: T; errors?: GraphqlError[] }> {
     const blocked = this.graphqlBlockedUntil()
     if (blocked) throw rateLimited(blocked)
     const res = await fetch(graphqlUrl(this.base), {
@@ -164,17 +180,20 @@ export class GitHub {
       const blockedNow = this.graphqlBlockedUntil()
       throw blockedNow ? rateLimited(blockedNow) : await toError(res)
     }
-    const json = (await res.json()) as { data?: T; errors?: { message: string; type?: string }[] }
+    const json = (await res.json()) as { data?: T; errors?: GraphqlError[] }
     // GitHub can answer a spent budget with 200 and a RATE_LIMITED error; hold off until the reset it gave (or a minute).
     if (json.errors?.some((e) => e.type === 'RATE_LIMITED')) {
       const reset = this.graphqlRate && this.graphqlRate.reset > Date.now() ? this.graphqlRate.reset : Date.now() + 60_000
       this.graphqlRate = { limit: this.graphqlRate?.limit ?? 5000, remaining: 0, reset }
       throw rateLimited(reset)
     }
-    // Partial data is still useful (e.g. one repo of many was renamed), so only fail with no data.
-    if (!json.data) throw new GitHubError(json.errors?.map((e) => e.message).join('; ') ?? 'GraphQL error', 200)
-    return json.data
+    return json
   }
+}
+
+export interface GraphqlError {
+  message: string
+  type?: string
 }
 
 /** Status 429 so callers can tell a spent budget from a broken query. */

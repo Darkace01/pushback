@@ -13,7 +13,7 @@ export const WIDGET_DEFAULTS: Record<WidgetType, { title: string; w: number; h: 
   security: { title: 'Security alerts', w: 6, h: 8, options: { view: 'alerts', kind: '', severity: '' } },
   packages: { title: 'Packages', w: 6, h: 8, options: { scope: 'user', org: '', type: '', visibility: '' } },
   cihealth: { title: 'CI health', w: 12, h: 9, options: { view: 'failing', days: 14, branch: '' } },
-  search: { title: 'Saved search', w: 6, h: 9, options: { query: 'is:open author:@me archived:false', kind: 'pr', author: '', label: '', repo: '', hideDrafts: false } }
+  search: { title: 'Saved search', w: 6, h: 9, options: { query: 'is:open author:@me archived:false', kind: 'pr', author: '', label: '', repo: '', milestone: '', hideDrafts: false } }
 }
 
 const widgets: WidgetConfig[] = [

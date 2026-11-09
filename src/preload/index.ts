@@ -38,7 +38,7 @@ const api: PushbackApi = {
   prDetail: (repo, num) => ipcRenderer.invoke('pr:detail', repo, num),
   commentPr: (repo, num, body) => ipcRenderer.invoke('pr:comment', repo, num, body),
   repoInfo: (repo) => ipcRenderer.invoke('repo:info', repo),
-  listIssues: (repo, state) => ipcRenderer.invoke('issues:list', repo, state),
+  listIssues: (repo, state, milestone) => ipcRenderer.invoke('issues:list', repo, state, milestone),
   issueDetail: (repo, num) => ipcRenderer.invoke('issue:detail', repo, num),
   createIssue: (repo, issue) => ipcRenderer.invoke('issue:create', repo, issue),
   setIssueState: (repo, num, state, reason) => ipcRenderer.invoke('issue:state', repo, num, state, reason),
@@ -85,6 +85,14 @@ const api: PushbackApi = {
   listPackages: (owner) => ipcRenderer.invoke('packages:list', owner),
   listPackageOrgs: () => ipcRenderer.invoke('packages:orgs'),
   packageVersions: (owner, type, name) => ipcRenderer.invoke('packages:versions', owner, type, name),
+  // --- milestones, projects and discussions ---
+  listMilestones: (repo, state) => ipcRenderer.invoke('milestones:list', repo, state),
+  setIssueMilestone: (repo, num, milestone) => ipcRenderer.invoke('issue:milestone', repo, num, milestone),
+  itemProjects: (repo, num) => ipcRenderer.invoke('projects:item', repo, num),
+  setProjectStatus: (repo, change) => ipcRenderer.invoke('projects:status', repo, change),
+  listDiscussions: (repo) => ipcRenderer.invoke('discussions:list', repo),
+  discussionDetail: (repo, num) => ipcRenderer.invoke('discussion:detail', repo, num),
+  commentDiscussion: (repo, id, body) => ipcRenderer.invoke('discussion:comment', repo, id, body),
   onNavigate: (cb) => subscribe<string>('navigate', cb)
 }
 

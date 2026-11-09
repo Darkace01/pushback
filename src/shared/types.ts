@@ -240,6 +240,8 @@ export interface SearchItem {
   comments: number
   isDraft: boolean
   labels: { name: string; color: string }[]
+  /** Title of the item's milestone, if any. */
+  milestone?: string
 }
 
 export interface SearchResult {
@@ -354,6 +356,8 @@ export interface IssueSummary {
   comments: number
   labels: Label[]
   assignees: string[]
+  /** The milestone the issue belongs to, if any. */
+  milestone?: MilestoneRef | null
 }
 
 export interface IssueDetail extends Omit<IssueSummary, 'comments'> {
@@ -787,7 +791,8 @@ export interface PushbackApi {
   prDetail(repo: string, num: number): Promise<PrDetail>
   commentPr(repo: string, num: number, body: string): Promise<ActionResult>
   repoInfo(repo: string): Promise<RepoInfo>
-  listIssues(repo: string, state: 'open' | 'closed'): Promise<IssueSummary[]>
+  /** `milestone` narrows the list to one milestone (its number) or to issues without one ('none'). */
+  listIssues(repo: string, state: 'open' | 'closed', milestone?: number | 'none'): Promise<IssueSummary[]>
   issueDetail(repo: string, num: number): Promise<IssueDetail>
   createIssue(repo: string, issue: { title: string; body: string; labels: string[] }): Promise<ActionResult>
   setIssueState(repo: string, num: number, state: 'open' | 'closed', reason?: 'completed' | 'not_planned'): Promise<ActionResult>
@@ -859,6 +864,20 @@ export interface PushbackApi {
   listPackageOrgs(): Promise<string[]>
   /** Recent versions of one package, newest first. */
   packageVersions(owner: string, type: PackageType, name: string): Promise<PackageVersion[]>
+  // --- milestones, projects and discussions ---
+  /** A repo's milestones in one state, with their issue counts and due dates. */
+  listMilestones(repo: string, state: 'open' | 'closed'): Promise<Milestone[]>
+  /** Puts an issue in a milestone (its number), or takes it out (null). */
+  setIssueMilestone(repo: string, num: number, milestone: number | null): Promise<ActionResult>
+  /** The Projects (v2) an issue or PR is in, with its Status in each. `missingScope` says when the token can't read projects. */
+  itemProjects(repo: string, num: number): Promise<ItemProjects>
+  /** Sets an item's single-select Status field in a project (null clears it). */
+  setProjectStatus(repo: string, change: ProjectStatusChange): Promise<ActionResult>
+  /** A repo's discussion categories and its most recently updated discussions. */
+  listDiscussions(repo: string): Promise<RepoDiscussions>
+  discussionDetail(repo: string, num: number): Promise<DiscussionDetail>
+  /** Adds a top-level comment to a discussion (by its node id, from `discussionDetail`). */
+  commentDiscussion(repo: string, discussionId: string, body: string): Promise<ActionResult>
   /** Fired when a notification is clicked: open this GitHub URL inside the app. */
   onNavigate(cb: (url: string) => void): () => void
 }
@@ -973,4 +992,111 @@ export interface NewAccount {
   name: string
   host: string
   token: string
+}
+
+// --- milestones ---
+
+export interface MilestoneRef {
+  number: number
+  title: string
+}
+
+export interface Milestone extends MilestoneRef {
+  description: string | null
+  state: 'open' | 'closed'
+  openIssues: number
+  closedIssues: number
+  dueOn: string | null
+  closedAt: string | null
+  url: string
+}
+
+// --- projects (v2) ---
+
+export interface ProjectStatusOption {
+  id: string
+  name: string
+  /** GitHub's colour name for the option, e.g. GREEN. */
+  color?: string
+}
+
+/** One project an issue or PR is in. */
+export interface ProjectItem {
+  /** The item's node id in this project (not the issue's). */
+  itemId: string
+  projectId: string
+  title: string
+  number: number
+  url: string
+  closed: boolean
+  /** The project's single-select "Status" field; absent when the project has none. */
+  status?: { fieldId: string; optionId: string | null; options: ProjectStatusOption[] }
+}
+
+export interface ItemProjects {
+  items: ProjectItem[]
+  /** Set when the token can't read projects (classic tokens need read:project), explaining what to do. */
+  missingScope?: string
+}
+
+export interface ProjectStatusChange {
+  projectId: string
+  itemId: string
+  fieldId: string
+  /** null clears the field. */
+  optionId: string | null
+}
+
+// --- discussions ---
+
+export interface DiscussionCategory {
+  id: string
+  name: string
+  /** Q&A-style categories, where a comment can be marked as the answer. */
+  isAnswerable: boolean
+}
+
+export interface DiscussionSummary {
+  number: number
+  title: string
+  url: string
+  author: string
+  authorAvatar: string
+  category: DiscussionCategory
+  createdAt: string
+  updatedAt: string
+  comments: number
+  upvotes: number
+  /** null for categories that don't take answers. */
+  answered: boolean | null
+  closed: boolean
+}
+
+export interface RepoDiscussions {
+  /** false when the repo has discussions turned off. */
+  enabled: boolean
+  categories: DiscussionCategory[]
+  discussions: DiscussionSummary[]
+}
+
+export interface DiscussionComment {
+  id: string
+  author: string
+  authorAvatar: string
+  createdAt: string
+  /** GitHub-rendered HTML: only ever shown through <Markdown>. */
+  bodyHtml: string
+  url: string
+  isAnswer: boolean
+  replies: DiscussionComment[]
+}
+
+export interface DiscussionDetail extends Omit<DiscussionSummary, 'comments'> {
+  /** Node id, needed to comment. */
+  id: string
+  /** All comments on GitHub; `comments` holds the first 50. */
+  commentCount: number
+  bodyHtml: string
+  locked: boolean
+  comments: DiscussionComment[]
 }

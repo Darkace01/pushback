@@ -32,7 +32,7 @@ export function buildSearchQuery(query: string, kind: SearchKind): string {
 /** What the widget's filter options do to a result list (all client-side, so changing them costs no requests). */
 export function filterSearchItems(
   items: SearchItem[],
-  o: { author?: unknown; label?: unknown; repo?: unknown; hideDrafts?: unknown },
+  o: { author?: unknown; label?: unknown; repo?: unknown; hideDrafts?: unknown; milestone?: unknown },
   matches: (hay: string, q: string) => boolean
 ): SearchItem[] {
   let out = items
@@ -40,6 +40,7 @@ export function filterSearchItems(
   if (o.author) out = out.filter((i) => matches(i.author, String(o.author)))
   if (o.repo) out = out.filter((i) => matches(i.repo, String(o.repo)))
   if (o.label) out = out.filter((i) => i.labels.some((l) => matches(l.name, String(o.label))))
+  if (o.milestone) out = out.filter((i) => !!i.milestone && matches(i.milestone, String(o.milestone)))
   return out
 }
 

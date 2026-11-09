@@ -14,6 +14,7 @@ interface GhSearchItem {
   comments: number
   draft?: boolean
   labels: { name: string; color: string }[]
+  milestone?: { title: string } | null
   pull_request?: { merged_at?: string | null }
 }
 
@@ -43,7 +44,8 @@ export async function runSearch(gh: GitHub, query: string, kind: SearchKind): Pr
       updatedAt: i.updated_at,
       comments: i.comments,
       isDraft: !!i.draft,
-      labels: i.labels.map((l) => ({ name: l.name, color: l.color }))
+      labels: i.labels.map((l) => ({ name: l.name, color: l.color })),
+      ...(i.milestone && { milestone: i.milestone.title })
     }))
   }
 }
