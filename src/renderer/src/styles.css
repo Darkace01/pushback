@@ -2313,7 +2313,8 @@ input[type='range'] {
 }
 .graph-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(80px, 150px) 72px 62px;
+  /* The subject keeps at least 140px; the author column gives way first in narrow lists. */
+  grid-template-columns: auto minmax(140px, 1fr) minmax(0, 150px) 72px 62px;
   align-items: center;
   gap: 10px;
   height: 30px;
@@ -2351,8 +2352,15 @@ input[type='range'] {
   align-items: center;
   gap: 5px;
   min-width: 0;
+  /* Several branch and tag chips can be wider than the column; clip them here instead of over the author. */
+  overflow: hidden;
+}
+.graph-subject .ref-chip {
+  flex-shrink: 1;
+  min-width: 32px;
 }
 .graph-text {
+  flex: 1 0 60px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2361,9 +2369,14 @@ input[type='range'] {
   display: flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   color: var(--dim);
+}
+.graph-author-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .graph-date,
 .graph-sha {
