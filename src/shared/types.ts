@@ -1,6 +1,8 @@
 // Types shared between the main process, preload bridge and renderer.
 
 import type { MergeStatus } from './mergeStatus'
+import type { MergeQueue } from './mergeQueue'
+import type { WorkflowTriggers } from './workflowTriggers'
 import type { ThemeColors } from './themes'
 
 export type RunStatus = 'queued' | 'in_progress' | 'completed' | 'waiting' | 'requested' | 'pending'
@@ -895,6 +897,12 @@ export interface PushbackApi {
   actionsAdminAct(repo: string, action: ActionsAdminAction): Promise<ActionResult>
   /** Fired when a notification is clicked: open this GitHub URL inside the app. */
   onNavigate(cb: (url: string) => void): () => void
+  // --- merge queue ---
+  /** Every entry in a branch's merge queue (the default branch when `branch` is omitted). One GraphQL query, never polled. */
+  mergeQueue(repo: string, branch?: string): Promise<MergeQueue>
+  // --- workflow files ---
+  /** A workflow's YAML at `ref` (default branch when omitted), with its parsed triggers and state. */
+  workflowFile(repo: string, path: string, ref?: string): Promise<WorkflowFile>
 }
 
 // --- security alerts ---
@@ -1164,3 +1172,19 @@ export type ActionsAdminAction =
   | { kind: 'delete-variable'; name: string }
   | { kind: 'delete-cache'; id: number }
   | { kind: 'delete-caches-for-ref'; ref: string }
+
+// --- workflow files ---
+
+export interface WorkflowFile {
+  repo: string
+  path: string
+  /** The ref it was read at; null for the default branch. */
+  ref: string | null
+  /** From the workflows API; null when GitHub doesn't know the workflow (e.g. a file that only exists on a branch). */
+  name: string | null
+  /** active, disabled_manually, disabled_inactivity, disabled_fork or deleted; null when unknown. */
+  state: string | null
+  content: string
+  url: string | null
+  triggers: WorkflowTriggers
+}

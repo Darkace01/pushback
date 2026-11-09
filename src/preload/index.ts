@@ -101,7 +101,11 @@ const api: PushbackApi = {
   // --- Actions settings ---
   actionsAdmin: (repo, kind) => ipcRenderer.invoke('actions-admin:list', repo, kind),
   actionsAdminAct: (repo, action) => ipcRenderer.invoke('actions-admin:act', repo, action),
-  onNavigate: (cb) => subscribe<string>('navigate', cb)
+  onNavigate: (cb) => subscribe<string>('navigate', cb),
+  // --- merge queue ---
+  mergeQueue: (repo, branch) => ipcRenderer.invoke('merge-queue:get', repo, branch),
+  // --- workflow files ---
+  workflowFile: (repo, path, ref) => ipcRenderer.invoke('workflow:file', repo, path, ref)
 }
 
 contextBridge.exposeInMainWorld('pushback', api)

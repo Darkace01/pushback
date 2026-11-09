@@ -22,6 +22,10 @@ export type ModalState =
   | { kind: 'import-dashboard' }
   | { kind: 'saved-searches' }
   | { kind: 'find-clones' }
+  /** A branch's merge queue; the default branch when `branch` is omitted. */
+  | { kind: 'merge-queue'; repo: string; branch?: string }
+  /** A workflow's YAML at `ref` (the default branch when omitted). */
+  | { kind: 'workflow-file'; repo: string; path: string; ref?: string; name?: string }
   | null
 
 let modal: ModalState = null
@@ -58,7 +62,7 @@ export const closeModal = () => {
 export const useModal = () => useSyncExternalStore(subscribe, () => modal)
 
 /** Views that open as a sub-page in the main area (with breadcrumbs) rather than as a dialog. */
-const PAGES = new Set(['pr', 'issue', 'run'])
+const PAGES = new Set(['pr', 'issue', 'run', 'merge-queue', 'workflow-file'])
 export const isPage = (m: ModalState): boolean => !!m && PAGES.has(m.kind)
 
 /** Every open view, root first. */

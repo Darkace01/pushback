@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { MergeStatus as Status } from '../../../shared/mergeStatus'
 import { api } from '../lib/store'
+import { pushModal } from '../lib/ui'
 import { StatusIcon } from './ui'
 
 const QUEUE_STATE: Record<string, string> = {
@@ -43,6 +44,11 @@ export function MergeStatus({ repo, number, refreshKey }: { repo: string; number
             position {status.queue.position}, {QUEUE_STATE[status.queue.state] ?? status.queue.state.toLowerCase()}
             {eta(status.queue.etaSeconds)}
           </span>
+        )}
+        {status.queue && (
+          <button className="link" onClick={() => pushModal({ kind: 'merge-queue', repo, branch: status.base || undefined })}>
+            View the whole queue
+          </button>
         )}
         {status.autoMerge && <span className="badge badge-muted">Auto-merge on{status.autoMerge.by ? ` (${status.autoMerge.by})` : ''}</span>}
       </div>
