@@ -1,6 +1,7 @@
 import { RepoRail } from './RepoRail'
 import { RunDeployments } from './Deployments'
 import { JobTimeline, RunApprovals, RunArtifacts, RunTiming } from './RunExtras'
+import { WatchButton } from './Watch'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Job, PullRequest, ReviewEvent, Workflow, WorkflowRun } from '../../../shared/types'
 import { duration, timeAgo, useNow } from '../lib/format'
@@ -254,6 +255,7 @@ export function RunDetailsModal({ run: initial }: { run: WorkflowRun }) {
             Re-run all jobs
           </button>
         )}
+        <WatchButton run={run} />
         <span className="spacer" />
         {workflow?.path.startsWith('.github/workflows/') && (
           <button className="btn" onClick={() => pushModal({ kind: 'workflow-file', repo: run.repo, path: workflow.path, ref: run.sha, name: workflow.name })}>

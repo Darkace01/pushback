@@ -27,6 +27,7 @@ export type ModalState =
   /** A workflow's YAML at `ref` (the default branch when omitted). */
   | { kind: 'workflow-file'; repo: string; path: string; ref?: string; name?: string }
   | { kind: 'discussion'; repo: string; number: number }
+  | { kind: 'activity' }
   | null
 
 let modal: ModalState = null

@@ -220,6 +220,8 @@ export interface Settings {
   activeAccount: string
   /** Named GitHub searches the user saved; pinning one makes a `search` widget that carries its own copy of the query. */
   savedSearches: SavedSearch[]
+  /** Summary notifications: after quiet hours or a snooze, and once a day. */
+  digest: DigestSettings
 }
 
 /** A cross-repo issue or PR search, e.g. "is:open author:@me" for your open PRs across every org. */
@@ -922,6 +924,20 @@ export interface PushbackApi {
   // --- workflow files ---
   /** A workflow's YAML at `ref` (default branch when omitted), with its parsed triggers and state. */
   workflowFile(repo: string, path: string, ref?: string): Promise<WorkflowFile>
+  // --- reviewers ---
+  /** Who is requested and who has reviewed a PR, plus suggested reviewers (code owners, recent reviewers, collaborators). */
+  prReviewers(repo: string, num: number): Promise<PrReviewers>
+  /** Requests reviews from (or with `remove`, withdraws them from) logins and org/slug teams. */
+  requestReviewers(repo: string, num: number, names: string[], remove: boolean): Promise<ActionResult>
+  // --- watched runs ---
+  /** Pins a run: the mini window shows it, and a notification fires when it finishes whatever the notification settings. */
+  watchRun(repo: string, runId: number): Promise<ActionResult>
+  /** Stops watching one run, or every run when called without arguments (which also closes the mini window). */
+  unwatchRun(repo?: string, runId?: number): Promise<void>
+  listWatched(): Promise<WatchedRun[]>
+  onWatched(cb: (runs: WatchedRun[]) => void): () => void
+  /** Brings the main window forward and opens the watched run there (used by the mini window). */
+  showWatched(repo: string, runId: number): Promise<void>
 }
 
 // --- security alerts ---
@@ -1313,4 +1329,46 @@ export interface DiscussionDetail extends Omit<DiscussionSummary, 'comments'> {
   bodyHtml: string
   locked: boolean
   comments: DiscussionComment[]
+}
+
+// --- notification digest ---
+
+export interface DigestSettings {
+  /** When quiet hours or a snooze end, show one summary of the notifications they held back. */
+  afterQuiet: boolean
+  /** Show a summary of the last day's activity once a day. */
+  daily: boolean
+  /** Local time (HH:MM) of the daily digest. */
+  dailyAt: string
+}
+
+// --- reviewers ---
+
+export interface ReviewerSuggestion {
+  /** A login, or a team as org/slug. */
+  login: string
+  team: boolean
+  reason: 'owner' | 'recent' | 'collaborator'
+  /** Why it's suggested, e.g. "Code owner of 3 changed files". */
+  detail: string
+}
+
+export interface PrReviewers {
+  requested: { login: string; team: boolean }[]
+  /** Each reviewer's latest review state (APPROVED, CHANGES_REQUESTED, COMMENTED…). */
+  reviewed: { login: string; avatar: string; state: string }[]
+  suggestions: ReviewerSuggestion[]
+  /** The CODEOWNERS file used, or null if the repo has none. */
+  codeowners: string | null
+}
+
+// --- watched runs ---
+
+export interface WatchedRun {
+  run: WorkflowRun
+  /** The job and step running now, while the run is in progress. */
+  job: string | null
+  step: string | null
+  addedAt: number
+  error?: string
 }

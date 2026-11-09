@@ -65,7 +65,8 @@ const ICONS = {
   sidebar: 'M2.5 3h11v10h-11zM6 3v10',
   pin: 'M6 2.5h4l-.5 4 2 2v1h-7v-1l2-2zM8 9.5v4',
   tabs: 'M2.5 5.5h11v8h-11zM2.5 5.5V3h4v2.5',
-  filter: 'M2.5 3.5h11l-4.5 5v4l-2 1v-5z'
+  filter: 'M2.5 3.5h11l-4.5 5v4l-2 1v-5z',
+  eye: 'M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8zM8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z'
 } as const
 
 export type IconName = keyof typeof ICONS

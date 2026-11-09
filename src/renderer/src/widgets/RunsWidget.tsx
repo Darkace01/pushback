@@ -6,6 +6,7 @@ import { duration, matches, shortRepo, timeAgo, useNow } from '../lib/format'
 import { api, toast, useSettings, useSnapshot, widgetRepos } from '../lib/store'
 import { pushModal } from '../lib/ui'
 import type { WidgetProps } from './types'
+import { WatchIconButton } from '../components/Watch'
 
 export async function rerun(run: WorkflowRun, failedOnly: boolean): Promise<void> {
   const r = await api.rerun(run.repo, run.id, failedOnly)
@@ -101,6 +102,7 @@ export const RunsWidget = memo(function RunsWidget({ widget, filter }: WidgetPro
               {active && <IconButton icon="stop" title="Cancel run" onClick={() => void cancel(run)} />}
               {!active && tone === 'bad' && <IconButton icon="rerun" title="Re-run failed jobs" onClick={() => void rerun(run, true)} />}
               {!active && <IconButton icon="refresh" title="Re-run all jobs" onClick={() => void rerun(run, false)} />}
+              <WatchIconButton run={run} />
               <IconButton icon="external" title="Open on GitHub" onClick={() => void api.openExternal(run.url)} />
             </div>
           </li>

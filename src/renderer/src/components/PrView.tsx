@@ -9,6 +9,7 @@ import { approve } from '../widgets/PrsWidget'
 import { Markdown } from './Markdown'
 import { MergeStatus } from './MergeStatus'
 import { ProjectsPanel } from './Projects'
+import { Reviewers } from './Reviewers'
 import { RepoRail } from './RepoRail'
 import { ReviewFiles } from './ReviewDiff'
 import { Avatar, Empty, Modal, runTone, Segmented, Skeleton, StatusIcon } from './ui'
@@ -106,6 +107,7 @@ export function PrModal({ repo, number }: { repo: string; number: number }) {
 
       {open && pr && <MergeStatus repo={repo} number={number} refreshKey={summary?.updatedAt} />}
       {pr && <ProjectsPanel repo={repo} number={number} />}
+      {open && pr && <Reviewers repo={repo} number={number} refreshKey={summary?.updatedAt} />}
 
       {error && <p className="del">Couldn't load this pull request: {error}</p>}
       {!pr && !error && <Skeleton kind="text" rows={6} />}

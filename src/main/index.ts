@@ -34,6 +34,13 @@ import { appIcon } from './icon'
 import { checkForUpdates, initUpdater, installUpdate, RELEASES_URL, updateStatus } from './updater'
 import { itemProjects, setProjectStatus } from './projects'
 import { commentDiscussion, discussionDetail, listDiscussions } from './discussions'
+import { dailyDue, dailyEvents, normalizeDigest, summarize, type Digest } from '../shared/digest'
+import { loadLastDigest, saveLastDigest } from './store'
+import { fetchPrReviewers, setReviewers } from './reviewers'
+import { Watcher } from './watch'
+import { paceForBudget } from './poller'
+import { outcome, trayLabel } from '../shared/watch'
+import type { WorkflowRun } from '../shared/types'
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -65,16 +72,31 @@ function send(channel: string, payload: unknown): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
 
-function notify(events: AppEvent[]): void {
-  if (!Notification.isSupported()) return
-  // Snooze and quiet hours hold back toasts only: the events are already in the feed and the unread badge.
-  if (isSilenced(settings.notifyRules, new Date())) return
+/** The events the user wants a toast for: their kind is switched on, the repo isn't muted, and "only mine" allows it. */
+function wantedEvents(events: AppEvent[]): AppEvent[] {
   const viewer = poller.snapshot.viewer?.login
-  const wanted = withoutMuted(events, settings.notifyRules).filter((e) => {
-    if (!settings.notify[NOTIFY_KEY[e.kind]]) return false
+  return withoutMuted(events, settings.notifyRules).filter((e) => {
+    const key = NOTIFY_KEY[e.kind]
+    if (key && !settings.notify[key]) return false
     // Review requests and approvals are always about you, so "only mine" never hides them.
     return !settings.notify.onlyMine || e.kind === 'pr-review' || e.kind === 'deploy-approval' || !viewer || e.actor === viewer
   })
+}
+
+/** Toasts quiet hours or a snooze held back, summarised in one notification once they end (Settings.digest.afterQuiet). */
+let held: AppEvent[] = []
+let lastDaily = 0
+/** Sent as a navigate target: the renderer opens Activity for it. */
+const ACTIVITY_TARGET = 'pushback:activity'
+
+function notify(events: AppEvent[]): void {
+  if (!Notification.isSupported()) return
+  const wanted = wantedEvents(events)
+  // Snooze and quiet hours hold back toasts only: the events are already in the feed and the unread badge.
+  if (isSilenced(settings.notifyRules, new Date())) {
+    if (settings.digest.afterQuiet) held.push(...wanted)
+    return
+  }
   // Collapse bursts (e.g. a matrix finishing) into one toast.
   if (wanted.length > 3) {
     const n = new Notification({ title: `Pushback · ${wanted.length} updates`, body: wanted.slice(0, 4).map((e) => e.title).join('\n') })
@@ -93,11 +115,109 @@ function notify(events: AppEvent[]): void {
   }
 }
 
+function showDigest(d: Digest): void {
+  const n = new Notification({ title: d.title, body: d.body })
+  n.on('click', () => {
+    showWindow()
+    send('navigate', ACTIVITY_TARGET)
+  })
+  n.show()
+}
+
+/** Checked every minute: the summary of held-back toasts once quiet ends, and the daily digest when it's due. */
+function digestTick(): void {
+  if (!Notification.isSupported()) return
+  const now = new Date()
+  if (isSilenced(settings.notifyRules, now)) return // both wait for the quiet period to end
+  if (held.length) {
+    const d = settings.digest.afterQuiet ? summarize(held) : null
+    held = []
+    if (d) showDigest(d)
+  }
+  if (dailyDue(settings.digest, lastDaily, now)) {
+    const d = summarize(dailyEvents(wantedEvents(poller.snapshot.events), lastDaily, now), 'Your daily digest')
+    lastDaily = now.getTime()
+    saveLastDigest(lastDaily)
+    if (d) showDigest(d)
+  }
+}
+
+// --- watched runs ---
+
+const watcher = new Watcher(
+  (repo) => clientFor(repo),
+  (repo, id) => poller.snapshot.repos[repo]?.runs.find((r) => r.id === id),
+  () => paceForBudget(Math.max(5, settings.activePollSeconds) * 1000, poller.client)
+)
+let mini: BrowserWindow | null = null
+
+watcher.on('change', (runs) => {
+  send('watched', runs)
+  if (mini && !mini.isDestroyed()) mini.webContents.send('watched', runs)
+  if (runs.length && !mini) createMiniWindow()
+  if (!runs.length && mini && !mini.isDestroyed()) mini.close()
+  updateTray()
+})
+
+// The user asked to watch this run, so it notifies even if that kind of notification is off, snoozed or muted.
+watcher.on('finished', (run: WorkflowRun) => {
+  if (!Notification.isSupported()) return
+  const n = new Notification({ title: `${run.name} #${run.runNumber} ${outcome(run)}`, body: `${run.repo} · ${run.branch} · ${run.title}` })
+  n.on('click', () => openRun(run.url))
+  n.show()
+})
+
+function openRun(url: string): void {
+  showWindow()
+  send('navigate', url)
+}
+
+/** The small always-on-top window listing watched runs. The same renderer, told by the hash to show only that. */
+function createMiniWindow(): void {
+  mini = new BrowserWindow({
+    width: 340,
+    height: 200,
+    minWidth: 260,
+    minHeight: 110,
+    alwaysOnTop: true,
+    frame: false,
+    skipTaskbar: true,
+    maximizable: false,
+    fullscreenable: false,
+    show: false,
+    backgroundColor: windowColors().bg,
+    title: 'Pushback · watched runs',
+    icon: appIcon(64),
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false
+    }
+  })
+  const w = mini
+  // Floats above full-screen apps too, like a picture-in-picture window.
+  w.setAlwaysOnTop(true, 'floating')
+  w.once('ready-to-show', () => w.showInactive())
+  // Closing the window (not just hiding it) means "stop watching".
+  w.on('closed', () => {
+    if (mini === w) mini = null
+    if (watcher.list().length) watcher.remove()
+  })
+  w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  w.webContents.on('will-navigate', (e) => e.preventDefault())
+  if (process.env.ELECTRON_RENDERER_URL) void w.loadURL(`${process.env.ELECTRON_RENDERER_URL}#mini`)
+  else void w.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'mini' })
+}
+
 function updateTray(): void {
   if (!tray) return
   const attention = attentionCount(poller.snapshot)
   const running = Object.values(poller.snapshot.repos).reduce((n, r) => n + r.runs.filter((x) => x.status !== 'completed').length, 0)
-  tray.setToolTip(`Pushback — ${running} running, ${attention} need attention`)
+  // Windows cuts tooltips at 127 characters, so the watched runs themselves are listed in the menu.
+  const watched = watcher.list()
+  const watching = watched.length === 1 ? `, watching ${trayLabel(watched[0].run, Date.now())}` : watched.length ? `, watching ${watched.length} runs` : ''
+  tray.setToolTip(`Pushback — ${running} running, ${attention} need attention${watching}`.slice(0, 127))
   if (process.platform === 'darwin') tray.setTitle(badgeText(attention))
   if (process.platform !== 'win32') app.setBadgeCount(attention)
   tray.setContextMenu(trayMenu(attention))
@@ -111,6 +231,7 @@ function applyLoginItem(): void {
 
 poller.on('update', (snapshot) => {
   send('snapshot', snapshot)
+  watcher.fromSnapshot()
   updateTray()
 })
 poller.on('events', (events) => {
@@ -217,6 +338,7 @@ function trayMenu(attention: number): Menu {
   return Menu.buildFromTemplate([
       { label: attention ? `Open Pushback (${attention} need attention)` : 'Open Pushback', click: showWindow },
       { label: 'Refresh now', click: () => poller.pollSoon() },
+      ...watchedMenu(),
       {
         label: 'Check for updates',
         click: () =>
@@ -233,6 +355,19 @@ function trayMenu(attention: number): Menu {
         }
       }
   ])
+}
+
+/** One tray item per watched run, opening it in the main window. */
+function watchedMenu(): Electron.MenuItemConstructorOptions[] {
+  const runs = watcher.list()
+  if (!runs.length) return []
+  return [
+    { type: 'separator' },
+    { label: 'Watching', enabled: false },
+    ...runs.map((w): Electron.MenuItemConstructorOptions => ({ label: trayLabel(w.run, Date.now()), click: () => openRun(w.run.url) })),
+    { label: 'Stop watching all', click: () => watcher.remove() },
+    { type: 'separator' }
+  ]
 }
 
 function createTray(): void {
@@ -357,8 +492,10 @@ function registerIpc(): void {
       ...settings,
       ...patch,
       notify: { ...settings.notify, ...patch.notify },
-      notifyRules: patch.notifyRules ? normalizeNotifyRules(patch.notifyRules) : settings.notifyRules
+      notifyRules: patch.notifyRules ? normalizeNotifyRules(patch.notifyRules) : settings.notifyRules,
+      digest: patch.digest ? normalizeDigest(patch.digest) : settings.digest
     }
+    if (!settings.digest.afterQuiet) held = []
     pruneRepoAccounts()
     saveSettings(settings)
     if (patch.mode || patch.darkTheme || patch.lightTheme || patch.colorOverrides) paintWindow()
@@ -818,6 +955,26 @@ function registerIpc(): void {
   ipcMain.handle('merge-queue:get', (_e, repo: string, branch?: string) => fetchMergeQueue(clientFor(repo), repo, branch ? String(branch) : undefined))
   // --- workflow files ---
   ipcMain.handle('workflow:file', (_e, repo: string, path: string, ref?: string) => fetchWorkflowFile(clientFor(repo), repo, String(path), ref ? String(ref) : undefined))
+  // --- reviewers ---
+  ipcMain.handle('pr:reviewers', (_e, repo: string, num: number) => fetchPrReviewers(clientFor(repo), repo, num))
+  ipcMain.handle('pr:request-reviewers', (_e, repo: string, num: number, names: string[], remove: boolean) =>
+    run(() => setReviewers(clientFor(repo), repo, num, names, remove === true), false)
+  )
+  // --- watched runs ---
+  ipcMain.handle('watch:add', async (_e, repo: string, id: number): Promise<ActionResult> => {
+    try {
+      await watcher.add(String(repo), Number(id))
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+  ipcMain.handle('watch:remove', (_e, repo?: string, id?: number) => watcher.remove(repo, id))
+  ipcMain.handle('watch:list', () => watcher.list())
+  ipcMain.handle('watch:show', (_e, repo: string, id: number) => {
+    const found = watcher.list().find((w) => w.run.repo === repo && w.run.id === id)
+    if (found) openRun(found.run.url)
+  })
 }
 
 // A throwaway profile for the end-to-end tests. Set before the single-instance lock, which is keyed on the
@@ -850,11 +1007,14 @@ if (!app.requestSingleInstanceLock()) {
     nativeTheme.on('updated', paintWindow)
     // After the first poll, so the scan's disk reads don't slow down startup.
     setTimeout(() => void autoLinkClones().catch(() => {}), 15_000)
+    lastDaily = loadLastDigest()
+    setInterval(digestTick, 60_000)
   })
 
   app.on('before-quit', () => {
     quitting = true
     poller.stop()
+    watcher.stop()
   })
   app.on('window-all-closed', () => {
     if (!settings.closeToTray) app.quit()

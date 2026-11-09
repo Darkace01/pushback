@@ -284,7 +284,34 @@ function NotifySection() {
       ))}
       <p className="dim small">Clicking a notification opens the run or pull request in Pushback. Bursts of more than three updates are grouped.</p>
       <NotifyRulesSection />
+      <DigestSection />
     </div>
+  )
+}
+
+function DigestSection() {
+  const settings = useSettings()
+  const digest = settings.digest
+  const set = (patch: Partial<typeof digest>) => void updateSettings({ digest: { ...digest, ...patch } })
+  return (
+    <>
+      <h4 className="group-head">Digest</h4>
+      <label className="check">
+        <input type="checkbox" checked={digest.afterQuiet} onChange={(e) => set({ afterQuiet: e.target.checked })} />
+        Summarise what I missed when quiet hours or a snooze end
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={digest.daily} onChange={(e) => set({ daily: e.target.checked })} />
+        Send a daily digest
+      </label>
+      {digest.daily && (
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <span className="dim">at</span>
+          <input type="time" value={digest.dailyAt} onChange={(e) => e.target.value && set({ dailyAt: e.target.value })} aria-label="Daily digest time" />
+        </div>
+      )}
+      <p className="dim small">One notification instead of many, such as “3 runs failed, 2 PRs need your review”. Clicking it opens Activity.</p>
+    </>
   )
 }
 
