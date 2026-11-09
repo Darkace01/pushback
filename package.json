@@ -1,6 +1,6 @@
 {
   "name": "pushback",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Pushback: a fast, customizable desktop dashboard for GitHub Actions and pull requests",
   "main": "./out/main/index.js",
   "scripts": {
