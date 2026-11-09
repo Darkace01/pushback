@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, s
 import { cpSync, existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import type { AccountInfo, ActionResult, AppEvent, CleanupRequest, DispatchResult, NewAccount, EventKind, GitAction, GitQuery, Job, NewPr, NewRelease, NotifySettings, RepoOption, ReviewEvent, Settings } from '../shared/types'
+import type { AccountInfo, ActionResult, ActionsAdminAction, ActionsAdminKind, AppEvent, CleanupRequest, DispatchResult, NewAccount, EventKind, GitAction, GitQuery, Job, NewPr, NewRelease, NotifySettings, RepoOption, ReviewEvent, Settings } from '../shared/types'
 import { fetchPrDetail, fetchRepoInfo } from './details'
 import { GitHub } from './github'
 import * as tools from './repoTools'
@@ -15,6 +15,7 @@ import { listDeployments } from './deployments'
 import { listSecurity } from './security'
 import { listPackageOrgs, listPackages, packageVersions } from './packages'
 import { fetchMergeStatus } from './mergeStatus'
+import { actionsAdmin, actionsAdminAct } from './actionsAdmin'
 import { AccountClients, hasAccountToken, saveAccountToken } from './accounts'
 import { accountOf, apiUrlFor, hostOf, normalizeHost, reposOfAccount, GITHUB_HOST } from '../shared/accounts'
 import { applyCleanup, listOpenPrs } from './cleanup'
@@ -738,6 +739,15 @@ function registerIpc(): void {
   ipcMain.handle('packages:list', (_e, owner: string) => listPackages(activeClient(), String(owner)))
   ipcMain.handle('packages:orgs', () => listPackageOrgs(activeClient()))
   ipcMain.handle('packages:versions', (_e, owner: string, type: string, name: string) => packageVersions(activeClient(), String(owner), String(type), String(name)))
+  // --- Actions settings (only while the section is open; never polled) ---
+  ipcMain.handle('actions-admin:list', (_e, repo: string, kind: ActionsAdminKind) => actionsAdmin(clientFor(repo), repo, kind))
+  ipcMain.handle('actions-admin:act', async (_e, repo: string, action: ActionsAdminAction): Promise<ActionResult> => {
+    try {
+      return await actionsAdminAct(clientFor(repo), repo, action)
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
   ipcMain.handle('editors:list', () => listEditors())
   ipcMain.handle('update:status', () => updateStatus())
   ipcMain.handle('update:check', () => checkForUpdates())

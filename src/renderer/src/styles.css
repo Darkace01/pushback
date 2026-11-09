@@ -3234,3 +3234,19 @@ button.crumb:hover {
 .cleanup-failures {
   margin-top: 10px;
 }
+
+/* --- Actions settings (secrets, variables, runners, caches) --- */
+.actions-admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.actions-admin-form textarea {
+  resize: vertical;
+}
+.actions-admin-value {
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

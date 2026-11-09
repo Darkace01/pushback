@@ -859,6 +859,11 @@ export interface PushbackApi {
   listPackageOrgs(): Promise<string[]>
   /** Recent versions of one package, newest first. */
   packageVersions(owner: string, type: PackageType, name: string): Promise<PackageVersion[]>
+  // --- Actions settings ---
+  /** One list from a repo's Actions settings (secret names, variables, self-hosted runners or caches). Never polled. */
+  actionsAdmin<K extends ActionsAdminKind>(repo: string, kind: K): Promise<ActionsAdminAnswer[K]>
+  /** Creates, updates or deletes a secret or variable, or deletes caches. */
+  actionsAdminAct(repo: string, action: ActionsAdminAction): Promise<ActionResult>
   /** Fired when a notification is clicked: open this GitHub URL inside the app. */
   onNavigate(cb: (url: string) => void): () => void
 }
@@ -974,3 +979,69 @@ export interface NewAccount {
   host: string
   token: string
 }
+
+// --- Actions settings (secrets, variables, runners, caches) ---
+
+export interface ActionsSecret {
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ActionsVariable {
+  name: string
+  value: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ActionsRunner {
+  id: number
+  name: string
+  os: string
+  status: 'online' | 'offline'
+  busy: boolean
+  labels: string[]
+}
+
+export interface ActionsCache {
+  id: number
+  key: string
+  ref: string
+  /** Bytes. */
+  size: number
+  lastUsedAt: string
+  createdAt: string
+}
+
+/** A list from the repo's Actions settings. `unavailable` says why GitHub refused it (the token lacks access), instead of an error. */
+export interface ActionsList<T> {
+  items: T[]
+  /** How many GitHub has in all; more than `items` when the list was cut short. */
+  total: number
+  unavailable?: string
+}
+
+export interface ActionsCaches extends ActionsList<ActionsCache> {
+  /** Every active cache in the repo, in bytes, and how many there are. */
+  usageBytes: number
+  usageCount: number
+}
+
+export interface ActionsAdminAnswer {
+  secrets: ActionsList<ActionsSecret>
+  variables: ActionsList<ActionsVariable>
+  runners: ActionsList<ActionsRunner>
+  caches: ActionsCaches
+}
+
+export type ActionsAdminKind = keyof ActionsAdminAnswer
+
+/** A change to a repo's Actions settings. Secret values only ever travel renderer → main, encrypted there before they leave. */
+export type ActionsAdminAction =
+  | { kind: 'set-secret'; name: string; value: string }
+  | { kind: 'delete-secret'; name: string }
+  | { kind: 'set-variable'; name: string; value: string; /** Updates this existing variable (renaming it if `name` differs) instead of creating one. */ existing?: string }
+  | { kind: 'delete-variable'; name: string }
+  | { kind: 'delete-cache'; id: number }
+  | { kind: 'delete-caches-for-ref'; ref: string }

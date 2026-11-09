@@ -85,6 +85,9 @@ const api: PushbackApi = {
   listPackages: (owner) => ipcRenderer.invoke('packages:list', owner),
   listPackageOrgs: () => ipcRenderer.invoke('packages:orgs'),
   packageVersions: (owner, type, name) => ipcRenderer.invoke('packages:versions', owner, type, name),
+  // --- Actions settings ---
+  actionsAdmin: (repo, kind) => ipcRenderer.invoke('actions-admin:list', repo, kind),
+  actionsAdminAct: (repo, action) => ipcRenderer.invoke('actions-admin:act', repo, action),
   onNavigate: (cb) => subscribe<string>('navigate', cb)
 }
 
