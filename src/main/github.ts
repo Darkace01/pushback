@@ -135,6 +135,19 @@ export class GitHub {
     return res.text()
   }
 
+  /** GET a binary resource (artifact zips, which redirect to blob storage). Never cached: they're large and fetched once. */
+  async binary(path: string): Promise<Buffer> {
+    const blocked = this.restBlockedUntil()
+    if (blocked) throw restLimited(blocked)
+    const res = await fetch(this.base + path, { headers: this.headers() })
+    this.trackRate(res)
+    if (!res.ok) {
+      this.noteBackoff(res)
+      throw await toError(res)
+    }
+    return Buffer.from(await res.arrayBuffer())
+  }
+
   async send(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
     const blocked = this.restBlockedUntil()
     if (blocked) throw restLimited(blocked)

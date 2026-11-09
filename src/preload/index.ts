@@ -85,6 +85,19 @@ const api: PushbackApi = {
   listPackages: (owner) => ipcRenderer.invoke('packages:list', owner),
   listPackageOrgs: () => ipcRenderer.invoke('packages:orgs'),
   packageVersions: (owner, type, name) => ipcRenderer.invoke('packages:versions', owner, type, name),
+  // --- deployment approvals ---
+  pendingDeployments: (repo, runId) => ipcRenderer.invoke('approvals:get', repo, runId),
+  reviewDeployments: (repo, runId, ids, state, comment) => ipcRenderer.invoke('approvals:review', repo, runId, ids, state, comment),
+  // --- run artifacts ---
+  runArtifacts: (repo, runId) => ipcRenderer.invoke('run:artifacts', repo, runId),
+  downloadArtifact: (repo, id, name) => ipcRenderer.invoke('artifact:download', repo, id, name),
+  // --- inline review ---
+  prThreads: (repo, num) => ipcRenderer.invoke('pr:threads', repo, num),
+  commentLine: (repo, num, comment) => ipcRenderer.invoke('pr:line-comment', repo, num, comment),
+  replyToThread: (repo, num, commentId, body) => ipcRenderer.invoke('pr:reply', repo, num, commentId, body),
+  resolveThread: (repo, threadId, resolved) => ipcRenderer.invoke('pr:resolve-thread', repo, threadId, resolved),
+  // --- GitHub notifications ---
+  readNotifications: (threadId) => ipcRenderer.invoke('notifications:read', threadId),
   onNavigate: (cb) => subscribe<string>('navigate', cb)
 }
 

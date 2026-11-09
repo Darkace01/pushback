@@ -4,6 +4,7 @@ import type {
   AppEvent,
   ChecksState,
   DispatchInput,
+  GhNotification,
   Inbox,
   InboxItem,
   PullRequest,
@@ -14,7 +15,10 @@ import type {
   WorkflowRun
 } from '../shared/types'
 import { pollSlowdown } from '../shared/repos'
+import { environmentNames, newApprovalsForYou } from '../shared/approvals'
+import { markRead, toNotification, type GhThread } from '../shared/notifications'
 import { GitHub } from './github'
+import { fetchApproval } from './runExtras'
 
 const MAX_EVENTS = 300
 /** Workflow definitions change rarely; refresh them every N polls. */
@@ -62,6 +66,7 @@ export class Poller extends EventEmitter<Events> {
   private forceGraphql = true
   private lastInbox?: Settled<InboxFetch>
   private lastPrs = new Map<string, Settled<PrFetch>>()
+  private lastNotifications?: Settled<GhNotification[]>
 
   constructor(
     private readonly getSettings: () => Settings,
@@ -86,6 +91,7 @@ export class Poller extends EventEmitter<Events> {
     this.cycle = 0
     this.forceGraphql = true
     this.lastInbox = undefined
+    this.lastNotifications = undefined
     this.lastPrs.clear()
     this.snapshot = {
       ...this.snapshot,
@@ -93,6 +99,9 @@ export class Poller extends EventEmitter<Events> {
       authSource: source,
       authError: undefined,
       viewer: undefined,
+      approvals: undefined,
+      notifications: undefined,
+      notificationsError: undefined,
       repos: {}
     }
   }
@@ -106,6 +115,14 @@ export class Poller extends EventEmitter<Events> {
       return
     }
     this.schedule(0)
+  }
+
+  /** Reflects a mark-as-read straight away instead of waiting for the next poll. */
+  markNotificationsRead(id?: string): void {
+    if (!this.snapshot.notifications) return
+    this.snapshot.notifications = markRead(this.snapshot.notifications, id)
+    if (this.lastNotifications?.status === 'fulfilled') this.lastNotifications = { status: 'fulfilled', value: this.snapshot.notifications }
+    this.publish()
   }
 
   stop(): void {
@@ -165,10 +182,14 @@ export class Poller extends EventEmitter<Events> {
         (value) => ({ status: 'fulfilled' as const, value }),
         (reason: unknown) => ({ status: 'rejected' as const, reason })
       )
-    const [inboxResult, runResults, prResults] = await Promise.all([
+    const [inboxResult, notificationResult, runResults, prResults] = await Promise.all([
       refreshGraphql || !this.lastInbox
         ? settle(primary ? this.fetchInbox(primary) : Promise.reject(new Error('no primary account')))
         : Promise.resolve(this.lastInbox),
+      // GitHub asks clients not to poll notifications faster than about once a minute, so they share the GraphQL cadence.
+      refreshGraphql || !this.lastNotifications
+        ? settle(primary ? this.fetchNotifications(primary) : Promise.reject(new Error('no primary account')))
+        : Promise.resolve(this.lastNotifications),
       Promise.allSettled(repos.map((repo) => this.fetchRuns(clientOf(repo), repo))),
       Promise.all(repos.map((repo) => (!refreshGraphql && this.lastPrs.get(repo)) || settle(this.fetchPullRequests(clientOf(repo), repo))))
     ])
@@ -177,6 +198,17 @@ export class Poller extends EventEmitter<Events> {
       this.forceGraphql = false
     }
     this.lastInbox = inboxResult
+    this.lastNotifications = notificationResult
+    if (notificationResult.status === 'fulfilled') {
+      this.snapshot.notifications = notificationResult.value
+      this.snapshot.notificationsError = undefined
+    } else if (primary) {
+      const status = (notificationResult.reason as { status?: number }).status
+      this.snapshot.notificationsError =
+        status === 403 || status === 404
+          ? "Your token can't read GitHub notifications. A classic token needs the notifications (or repo) scope."
+          : String((notificationResult.reason as Error).message)
+    }
     this.lastPrs = new Map(repos.map((repo, i) => [repo, prResults[i]]))
     const workflowResults = await Promise.allSettled(
       repos.map((repo) =>
@@ -220,6 +252,24 @@ export class Poller extends EventEmitter<Events> {
       }
     })
     this.snapshot.repos = next
+
+    // Only runs paused for review cost a request here, and an unchanged answer is a free 304.
+    const waiting = repos.flatMap((repo) => next[repo].runs.filter((r) => r.status === 'waiting'))
+    const approvalResults = await Promise.allSettled(waiting.map((run) => fetchApproval(clientOf(run.repo), run)))
+    const oldApprovals = this.snapshot.approvals
+    const approvals = approvalResults.flatMap((r, i) => {
+      if (r.status === 'fulfilled') return r.value ? [r.value] : []
+      // A failed lookup keeps what we knew rather than making the approval vanish and reappear.
+      return (oldApprovals ?? []).filter((a) => a.runId === waiting[i].id)
+    })
+    this.snapshot.approvals = approvals
+    if (oldApprovals) {
+      for (const a of newApprovalsForYou(oldApprovals, approvals))
+        newEvents.push(
+          makeEvent(a.repo, 'deploy-approval', `Approval needed: ${a.runName} → ${environmentNames(a)}`, `${a.repo} · ${a.branch} · started by ${a.actor}`, a.runUrl, this.snapshot.viewer?.login)
+        )
+    }
+
     this.snapshot.rateLimit = primary?.rate
     this.snapshot.graphqlRateLimit = primary?.graphqlRate
     // Review requests in repos you don't track still deserve a ping.
@@ -273,6 +323,11 @@ export class Poller extends EventEmitter<Events> {
       viewer: data.viewer as InboxFetch['viewer'],
       inbox: { reviewRequests: search('reviewRequests'), myPrs: search('myPrs'), assigned: search('assigned') }
     }
+  }
+
+  private async fetchNotifications(gh: GitHub): Promise<GhNotification[]> {
+    const threads = await gh.get<GhThread[]>('/notifications?per_page=50')
+    return threads.map(toNotification)
   }
 
   private async fetchPullRequests(gh: GitHub, repo: string): Promise<PrFetch> {

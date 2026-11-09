@@ -40,6 +40,31 @@ export const RUNS: Record<string, object[]> = {
   'acme/web': [run('acme/web', 201, { status: 'in_progress', conclusion: null, display_title: 'Build site', created_at: ago(2), run_started_at: ago(2), updated_at: ago(1) })]
 }
 
+/** With `waiting`, a Deploy run paused for approval to prod-acme, which the signed-in user can approve. */
+export const WAITING_RUN_ID = 106
+const waitingRun = () =>
+  run('acme/api', WAITING_RUN_ID, { workflow_id: 2, name: 'Deploy', display_title: 'Deploy', status: 'waiting', conclusion: null, event: 'push', created_at: ago(4), run_started_at: ago(4), updated_at: ago(3) })
+
+/** GitHub's notification threads for the signed-in user. */
+const NOTIFICATIONS = [
+  {
+    id: '5001',
+    unread: true,
+    reason: 'mention',
+    updated_at: ago(12),
+    subject: { title: 'Release checklist for v2', type: 'Discussion', url: null },
+    repository: { full_name: 'globex/web', html_url: 'https://github.com/globex/web' }
+  },
+  {
+    id: '5002',
+    unread: false,
+    reason: 'review_requested',
+    updated_at: ago(40),
+    subject: { title: 'Add login page', type: 'PullRequest', url: 'https://api.github.com/repos/acme/api/pulls/7' },
+    repository: { full_name: 'acme/api', html_url: 'https://github.com/acme/api' }
+  }
+]
+
 /** The run the fake creates when the Deploy workflow is dispatched. */
 export const DISPATCHED_RUN_ID = 9001
 
@@ -144,6 +169,28 @@ function graphql(query: string, vars: Record<string, string>, rich: boolean) {
       }
     }
   }
+  // Inline review threads on PR 7's only file: one open conversation on line 1.
+  if (query.includes('reviewThreads(first: 100)') && !query.includes('mergeStateStatus'))
+    return {
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            nodes: [
+              {
+                id: 'THREAD_1',
+                isResolved: false,
+                isOutdated: false,
+                path: 'src/login.ts',
+                line: 1,
+                originalLine: 1,
+                diffSide: 'RIGHT',
+                comments: { nodes: [{ databaseId: 801, bodyHTML: '<p>Should this be a function?</p>', createdAt: ago(20), url: '', author: { login: 'bob', avatarUrl: '' } }] }
+              }
+            ]
+          }
+        }
+      }
+    }
   if (query.includes('mergeStateStatus')) {
     const ctx = (name: string, conclusion: string, isRequired: boolean) => ({ __typename: 'CheckRun', name, status: 'COMPLETED', conclusion, isRequired })
     const base = { isDraft: false, mergeable: 'MERGEABLE', isInMergeQueue: false, mergeQueueEntry: null, autoMergeRequest: null, reviewThreads: { nodes: [] } }
@@ -231,9 +278,25 @@ function graphql(query: string, vars: Record<string, string>, rich: boolean) {
   return { repository: null }
 }
 
-function rest(path: string, rich: boolean, enterprise = false): unknown {
+function rest(path: string, rich: boolean, enterprise = false, waiting = false): unknown {
   const [p] = path.split('?')
   let m: RegExpMatchArray | null
+  if (p === '/notifications') return NOTIFICATIONS
+  if ((m = p.match(/^\/repos\/acme\/api\/actions\/runs\/(\d+)\/pending_deployments$/)))
+    return Number(m[1]) === WAITING_RUN_ID && waiting
+      ? [{ environment: { id: 77, name: 'prod-acme', html_url: '' }, wait_timer: 0, current_user_can_approve: true, reviewers: [{ type: 'User', reviewer: { login: 'octo' } }] }]
+      : []
+  // Run 103 uploaded a build and a coverage report that has since expired.
+  if ((m = p.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/artifacts$/)))
+    return {
+      artifacts:
+        m[1] === '103'
+          ? [
+              { id: 61, name: 'dist', size_in_bytes: 1_572_864, expired: false, created_at: ago(9), expires_at: new Date(now + 80 * 86_400_000).toISOString() },
+              { id: 62, name: 'coverage', size_in_bytes: 4096, expired: true, created_at: ago(9), expires_at: ago(1) }
+            ]
+          : []
+    }
   if (p === '/user') return { login: enterprise ? 'octo-ent' : 'octo', avatar_url: '' }
   if (p === '/user/repos') return path.includes('page=1') ? [{ full_name: 'acme/api', description: 'The API', private: true, pushed_at: ago(5) }, { full_name: 'acme/web', description: 'The website', private: false, pushed_at: ago(60) }] : []
   // GitHub Packages: octo publishes an npm package and a container image; the acme org publishes a private npm package.
@@ -272,7 +335,8 @@ function rest(path: string, rich: boolean, enterprise = false): unknown {
     const head = new URLSearchParams(path.split('?')[1] ?? '').get('head')
     return head ? all.filter((x) => head.endsWith(':' + x.head.ref)) : all
   }
-  if ((m = p.match(/^\/repos\/([^/]+\/[^/]+)\/actions\/runs$/))) return { workflow_runs: [...(RUNS[m[1]] ?? []), ...(rich ? (RICH_RUNS[m[1]] ?? []) : [])] }
+  if ((m = p.match(/^\/repos\/([^/]+\/[^/]+)\/actions\/runs$/)))
+    return { workflow_runs: [...(waiting && m[1] === 'acme/api' ? [waitingRun()] : []), ...(RUNS[m[1]] ?? []), ...(rich ? (RICH_RUNS[m[1]] ?? []) : [])] }
   if ((m = p.match(/^\/repos\/([^/]+\/[^/]+)\/actions\/workflows$/)))
     return {
       workflows:
@@ -285,6 +349,13 @@ function rest(path: string, rich: boolean, enterprise = false): unknown {
     }
   if (p.endsWith('/contents/.github/workflows/deploy.yml')) return { content: Buffer.from(DEPLOY_YAML).toString('base64') }
   if (p.endsWith('/contents/.github/workflows/ci.yml')) return { content: Buffer.from('on: push\n').toString('base64') }
+  // Run 103 ran build and test in parallel, then deploy; the rest have one job.
+  if ((m = p.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs\/103\/jobs$/))) {
+    const j = (id: number, name: string, from: number, to: number, conclusion: string) => ({
+      id, name, status: 'completed', conclusion, started_at: ago(from), completed_at: ago(to), html_url: '', steps: [{ name: 'Run', status: 'completed', conclusion, number: 1 }]
+    })
+    return { jobs: [j(1031, 'build', 10, 9.5, 'success'), j(1032, 'test', 10, 9, 'failure'), j(1033, 'lint', 10, 9.8, 'success')] }
+  }
   if ((m = p.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/jobs$/)))
     return {
       jobs: [
@@ -403,8 +474,9 @@ const body = (req: IncomingMessage) =>
  * `rich` adds more repos and history, for screenshots. `enterprise` makes it a GitHub Enterprise Server: the API lives under
  * /api/v3 (GraphQL at /api/graphql) and only the token `ghes-token` is accepted.
  */
-export async function startFakeGitHub(opts: { rich?: boolean; enterprise?: boolean } = {}): Promise<FakeGitHub> {
+export async function startFakeGitHub(opts: { rich?: boolean; enterprise?: boolean; waiting?: boolean } = {}): Promise<FakeGitHub> {
   const rich = !!opts.rich
+  const waiting = !!opts.waiting
   const enterprise = !!opts.enterprise
   const requests: { method: string; path: string; body?: string }[] = []
   const tokens = new Set<string>()
@@ -452,10 +524,24 @@ export async function startFakeGitHub(opts: { rich?: boolean; enterprise?: boole
       res.writeHead(201, headers).end(JSON.stringify({ html_url: 'https://github.com/acme/api/releases/tag/v1.3.0' }))
       return
     }
+    // Approving a deployment, line comments and replies, and marking every notification read.
+    if (
+      (req.method === 'POST' && /^\/repos\/[^/]+\/[^/]+\/(actions\/runs\/\d+\/pending_deployments|pulls\/\d+\/comments(\/\d+\/replies)?)$/.test(path)) ||
+      (req.method === 'PUT' && path === '/notifications')
+    ) {
+      bodies.push({ method: req.method, path, body: JSON.parse(text || '{}') })
+      res.writeHead(req.method === 'PUT' ? 205 : 201, headers).end(req.method === 'PUT' ? '' : '{}')
+      return
+    }
+    // An artifact download: a few bytes standing in for the zip.
+    if (req.method === 'GET' && /^\/repos\/[^/]+\/[^/]+\/actions\/artifacts\/\d+\/zip$/.test(path)) {
+      res.writeHead(200, { ...headers, 'Content-Type': 'application/zip' }).end(Buffer.from('PK fake zip'))
+      return
+    }
     // Writes (cleanup) are accepted and recorded; tests assert on exactly which ones happened.
     if (req.method === 'DELETE') return void res.writeHead(204, headers).end()
     if (req.method === 'PATCH') return void res.writeHead(200, headers).end('{}')
-    const data = req.method === 'GET' ? rest(path, rich, enterprise) : undefined
+    const data = req.method === 'GET' ? rest(path, rich, enterprise, waiting) : undefined
     if (data && typeof data === 'object' && 'status' in data && 'body' in data) res.writeHead(data.status as number, headers).end(JSON.stringify(data.body))
     else if (data === undefined) res.writeHead(404, headers).end(JSON.stringify({ message: 'Not Found' }))
     else if (typeof data === 'string') res.writeHead(200, { ...headers, 'Content-Type': 'text/html' }).end(data)

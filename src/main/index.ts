@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, s
 import { cpSync, existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import type { AccountInfo, ActionResult, AppEvent, CleanupRequest, DispatchResult, NewAccount, EventKind, GitAction, GitQuery, Job, NewPr, NewRelease, NotifySettings, RepoOption, ReviewEvent, Settings } from '../shared/types'
+import type { AccountInfo, ActionResult, AppEvent, CleanupRequest, DispatchResult, NewAccount, EventKind, GitAction, GitQuery, Job, NewLineComment, NewPr, NewRelease, NotifySettings, RepoOption, ReviewEvent, Settings } from '../shared/types'
 import { fetchPrDetail, fetchRepoInfo } from './details'
 import { GitHub } from './github'
 import * as tools from './repoTools'
@@ -15,6 +15,8 @@ import { listDeployments } from './deployments'
 import { listSecurity } from './security'
 import { listPackageOrgs, listPackages, packageVersions } from './packages'
 import { fetchMergeStatus } from './mergeStatus'
+import { artifactFileName, artifactZip, fetchApproval, listArtifacts, reviewDeployments } from './runExtras'
+import { commentLine, fetchThreads, replyToThread, resolveThread } from './reviewThreads'
 import { AccountClients, hasAccountToken, saveAccountToken } from './accounts'
 import { accountOf, apiUrlFor, hostOf, normalizeHost, reposOfAccount, GITHUB_HOST } from '../shared/accounts'
 import { applyCleanup, listOpenPrs } from './cleanup'
@@ -50,7 +52,8 @@ const NOTIFY_KEY: Record<EventKind, keyof NotifySettings> = {
   'pr-closed': 'prClosed',
   'pr-ready': 'prReady',
   'pr-review': 'reviewRequested',
-  'pr-checks-failed': 'checksFailed'
+  'pr-checks-failed': 'checksFailed',
+  'deploy-approval': 'approvalRequested'
 }
 
 function send(channel: string, payload: unknown): void {
@@ -64,8 +67,8 @@ function notify(events: AppEvent[]): void {
   const viewer = poller.snapshot.viewer?.login
   const wanted = withoutMuted(events, settings.notifyRules).filter((e) => {
     if (!settings.notify[NOTIFY_KEY[e.kind]]) return false
-    // Review requests are always about you, so "only mine" never hides them.
-    return !settings.notify.onlyMine || e.kind === 'pr-review' || !viewer || e.actor === viewer
+    // Review requests and approvals are always about you, so "only mine" never hides them.
+    return !settings.notify.onlyMine || e.kind === 'pr-review' || e.kind === 'deploy-approval' || !viewer || e.actor === viewer
   })
   // Collapse bursts (e.g. a matrix finishing) into one toast.
   if (wanted.length > 3) {
@@ -738,6 +741,48 @@ function registerIpc(): void {
   ipcMain.handle('packages:list', (_e, owner: string) => listPackages(activeClient(), String(owner)))
   ipcMain.handle('packages:orgs', () => listPackageOrgs(activeClient()))
   ipcMain.handle('packages:versions', (_e, owner: string, type: string, name: string) => packageVersions(activeClient(), String(owner), String(type), String(name)))
+  // --- deployment approvals ---
+  ipcMain.handle('approvals:get', (_e, repo: string, runId: number) => {
+    const run = poller.snapshot.repos[repo]?.runs.find((r) => r.id === Number(runId))
+    if (!run) return null
+    return fetchApproval(clientFor(repo), run)
+  })
+  ipcMain.handle('approvals:review', (_e, repo: string, runId: number, ids: number[], state: 'approved' | 'rejected', comment: string) =>
+    run(() => reviewDeployments(clientFor(repo), repo, runId, Array.isArray(ids) ? ids : [], state, comment))
+  )
+  // --- run artifacts ---
+  ipcMain.handle('run:artifacts', (_e, repo: string, runId: number) => listArtifacts(clientFor(repo), repo, runId))
+  ipcMain.handle('artifact:download', async (_e, repo: string, id: number, name: string): Promise<ActionResult> => {
+    const target = await dialog.showSaveDialog(win!, { defaultPath: artifactFileName(name), filters: [{ name: 'Zip archive', extensions: ['zip'] }] })
+    if (target.canceled || !target.filePath) return { ok: false }
+    try {
+      await writeFile(target.filePath, await artifactZip(clientFor(repo), repo, id))
+      return { ok: true, url: target.filePath }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+  // --- inline review ---
+  ipcMain.handle('pr:threads', (_e, repo: string, num: number) => fetchThreads(clientFor(repo), repo, num))
+  ipcMain.handle('pr:line-comment', (_e, repo: string, num: number, c: NewLineComment) => run(() => commentLine(clientFor(repo), repo, num, c), false))
+  ipcMain.handle('pr:reply', (_e, repo: string, num: number, commentId: number, body: string) =>
+    run(() => replyToThread(clientFor(repo), repo, num, commentId, body), false)
+  )
+  ipcMain.handle('pr:resolve-thread', (_e, repo: string, threadId: string, resolved: boolean) =>
+    run(() => resolveThread(clientFor(repo), threadId, Boolean(resolved)), false)
+  )
+  // --- GitHub notifications (the primary login's, like the inbox) ---
+  ipcMain.handle('notifications:read', async (_e, threadId?: string): Promise<ActionResult> => {
+    try {
+      const gh = requireClient()
+      if (threadId) await gh.send('PATCH', `/notifications/threads/${encodeURIComponent(String(threadId))}`)
+      else await gh.send('PUT', '/notifications', { last_read_at: new Date().toISOString(), read: true })
+      poller.markNotificationsRead(threadId ? String(threadId) : undefined)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
   ipcMain.handle('editors:list', () => listEditors())
   ipcMain.handle('update:status', () => updateStatus())
   ipcMain.handle('update:check', () => checkForUpdates())

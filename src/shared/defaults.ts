@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
     prReady: true,
     reviewRequested: true,
     checksFailed: true,
+    approvalRequested: true,
     onlyMine: false
   },
   notifyRules: { quietHours: { enabled: false, start: '22:00', end: '08:00' }, snoozedUntil: 0, mutedRepos: [] },

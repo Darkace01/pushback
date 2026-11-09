@@ -89,6 +89,7 @@ export type EventKind =
   | 'pr-ready'
   | 'pr-review'
   | 'pr-checks-failed'
+  | 'deploy-approval'
 
 export interface AppEvent {
   id: string
@@ -141,6 +142,8 @@ export interface NotifySettings {
   prReady: boolean
   reviewRequested: boolean
   checksFailed: boolean
+  /** A deployment is waiting for your approval. */
+  approvalRequested: boolean
   /** Only notify about runs triggered by / PRs authored by the signed-in user. */
   onlyMine: boolean
 }
@@ -302,6 +305,12 @@ export interface Snapshot {
   viewer?: { login: string; avatarUrl: string }
   repos: Record<string, RepoState>
   inbox?: Inbox
+  /** Runs paused for a protected environment's review, in the polled repos. */
+  approvals?: PendingApproval[]
+  /** GitHub's own notification threads for the primary account, newest first. */
+  notifications?: GhNotification[]
+  /** Why notifications couldn't be read (usually a token without the notifications scope). */
+  notificationsError?: string
   events: AppEvent[]
   rateLimit?: RateLimit
   graphqlRateLimit?: RateLimit
@@ -487,6 +496,8 @@ export interface PrDetail {
   mergeableState: string
   labels: { name: string; color: string }[]
   requestedReviewers: string[]
+  /** The head commit, which new line comments are made against. */
+  headSha: string
   comments: PrComment[]
   commits: PrCommit[]
   files: PrFile[]
@@ -859,6 +870,24 @@ export interface PushbackApi {
   listPackageOrgs(): Promise<string[]>
   /** Recent versions of one package, newest first. */
   packageVersions(owner: string, type: PackageType, name: string): Promise<PackageVersion[]>
+  // --- deployment approvals ---
+  /** The environments a waiting run needs approved; null when it isn't waiting on any. */
+  pendingDeployments(repo: string, runId: number): Promise<PendingApproval | null>
+  /** Approves or rejects a waiting run's deployments to the given environments. GitHub requires a comment. */
+  reviewDeployments(repo: string, runId: number, environmentIds: number[], state: 'approved' | 'rejected', comment: string): Promise<ActionResult>
+  // --- run artifacts ---
+  runArtifacts(repo: string, runId: number): Promise<RunArtifact[]>
+  /** Asks where to save, then downloads the artifact's zip there. `ok: false` with no error if cancelled. */
+  downloadArtifact(repo: string, artifactId: number, name: string): Promise<ActionResult>
+  // --- inline review ---
+  prThreads(repo: string, num: number): Promise<ReviewThread[]>
+  /** Starts a review thread on one line of the diff. */
+  commentLine(repo: string, num: number, comment: NewLineComment): Promise<ActionResult>
+  replyToThread(repo: string, num: number, commentId: number, body: string): Promise<ActionResult>
+  resolveThread(repo: string, threadId: string, resolved: boolean): Promise<ActionResult>
+  // --- GitHub notifications ---
+  /** Marks one notification thread read on GitHub, or every one when no id is given. */
+  readNotifications(threadId?: string): Promise<ActionResult>
   /** Fired when a notification is clicked: open this GitHub URL inside the app. */
   onNavigate(cb: (url: string) => void): () => void
 }
@@ -973,4 +1002,94 @@ export interface NewAccount {
   name: string
   host: string
   token: string
+}
+
+// --- deployment approvals ---
+
+export interface PendingEnvironment {
+  id: number
+  name: string
+  url: string
+  /** Minutes a wait timer holds the deployment after approval; 0 for none. */
+  waitTimer: number
+  /** Whether the signed-in user is one of the required reviewers. */
+  canApprove: boolean
+  /** Required reviewers: user logins and team slugs. */
+  reviewers: string[]
+}
+
+/** A workflow run paused until someone approves its deployments. */
+export interface PendingApproval {
+  repo: string
+  runId: number
+  runName: string
+  runNumber: number
+  runUrl: string
+  branch: string
+  actor: string
+  /** When the run started waiting (the run's last update). */
+  since: string
+  environments: PendingEnvironment[]
+}
+
+// --- run artifacts ---
+
+export interface RunArtifact {
+  id: number
+  name: string
+  /** Bytes. */
+  size: number
+  expired: boolean
+  createdAt: string
+  expiresAt: string | null
+}
+
+// --- inline review ---
+
+export interface ReviewComment {
+  /** REST id, used to reply. */
+  id: number
+  author: string
+  authorAvatar: string
+  /** GitHub-rendered HTML; render it through <Markdown>. */
+  bodyHtml: string
+  createdAt: string
+  url: string
+}
+
+export interface ReviewThread {
+  /** GraphQL node id, used to resolve the thread. */
+  id: string
+  path: string
+  /** The line in the current diff; null once the code it was on has changed (outdated). */
+  line: number | null
+  side: 'LEFT' | 'RIGHT'
+  resolved: boolean
+  outdated: boolean
+  comments: ReviewComment[]
+}
+
+export interface NewLineComment {
+  path: string
+  line: number
+  side: 'LEFT' | 'RIGHT'
+  body: string
+  commitId: string
+}
+
+// --- GitHub notifications ---
+
+export interface GhNotification {
+  /** The thread id GitHub marks read. */
+  id: string
+  repo: string
+  title: string
+  /** PullRequest, Issue, Release, Discussion, CheckSuite, Commit… */
+  type: string
+  /** Why you got it: review_requested, mention, author, ci_activity… */
+  reason: string
+  unread: boolean
+  updatedAt: string
+  /** The page on GitHub it is about. */
+  url: string
 }

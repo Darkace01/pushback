@@ -77,7 +77,8 @@ test('quiet hours, snooze and muted repos are saved from Settings', async () => 
   await page.locator('.search-trigger').click()
   await page.getByPlaceholder(/Search/).fill('open settings')
   await page.keyboard.press('Enter')
-  await page.getByRole('tab', { name: 'Notifications' }).or(page.getByRole('button', { name: 'Notifications' })).first().click()
+  const dialog = page.locator('.modal-backdrop')
+  await dialog.getByRole('tab', { name: 'Notifications' }).or(dialog.getByRole('button', { name: 'Notifications' })).first().click()
 
   await page.getByLabel('No notifications during quiet hours').check()
   await page.getByLabel('Quiet hours start').fill('23:30')

@@ -1,5 +1,6 @@
 import { RepoRail } from './RepoRail'
 import { RunDeployments } from './Deployments'
+import { JobTimeline, RunApprovals, RunArtifacts, RunTiming } from './RunExtras'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Job, PullRequest, ReviewEvent, Workflow, WorkflowRun } from '../../../shared/types'
 import { duration, timeAgo, useNow } from '../lib/format'
@@ -196,6 +197,7 @@ export function RunDetailsModal({ run: initial }: { run: WorkflowRun }) {
   const run = snapshot.repos[initial.repo]?.runs.find((r) => r.id === initial.id) ?? initial
   const [jobs, setJobs] = useState<Job[] | null>(null)
   const [error, setError] = useState<string>()
+  const [view, setView] = useState<'steps' | 'timeline'>('steps')
   const active = run.status !== 'completed'
   const now = useNow(5000)
 
@@ -231,6 +233,7 @@ export function RunDetailsModal({ run: initial }: { run: WorkflowRun }) {
             <span>{run.actor}</span>
             <span>{timeAgo(run.createdAt, now)}</span>
             <span>{active ? duration(run.startedAt, now) : duration(run.startedAt, run.updatedAt)}</span>
+            <RunTiming run={run} />
           </div>
         </div>
       </div>
@@ -258,10 +261,22 @@ export function RunDetailsModal({ run: initial }: { run: WorkflowRun }) {
           Open on GitHub
         </button>
       </div>
+      <RunApprovals run={run} />
       <RunDeployments repo={run.repo} runId={run.id} />
       {error && <p className="del">{error}</p>}
       {!jobs && !error && <Skeleton rows={3} />}
-      {jobs && (
+      {jobs && jobs.length > 1 && (
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            ['steps', 'Jobs and steps'],
+            ['timeline', 'Timeline']
+          ]}
+        />
+      )}
+      {jobs && view === 'timeline' && jobs.length > 1 && <JobTimeline jobs={jobs} />}
+      {jobs && (view === 'steps' || jobs.length <= 1) && (
         <div className="jobs">
           {jobs.map((job) => (
             <JobView key={job.id} job={job} repo={run.repo} initiallyOpen={job.conclusion === 'failure' || job.status === 'in_progress'} />
@@ -269,6 +284,7 @@ export function RunDetailsModal({ run: initial }: { run: WorkflowRun }) {
           {!jobs.length && <p className="dim">No jobs.</p>}
         </div>
       )}
+      <RunArtifacts run={run} />
     </Modal>
   )
 }
@@ -363,7 +379,7 @@ export function ReviewModal({ pr }: { pr: Pick<PullRequest, 'repo' | 'number' | 
         onChange={(e) => setBody(e.target.value)}
         placeholder={needsBody ? (event === 'COMMENT' ? 'Leave a comment' : 'What needs to change?') : 'Optional note with your approval'}
       />
-      <p className="dim small">Inline comments on specific lines still need GitHub. Open the pull request there for those.</p>
+      <p className="dim small">To comment on specific lines, open the pull request's Files tab and click a line number.</p>
       <footer className="modal-actions">
         <button className="link" onClick={() => void api.openExternal(pr.url)}>
           Review on GitHub →

@@ -24,6 +24,7 @@ const NOTIFY_LABELS: [keyof NotifySettings, string][] = [
   ['prReady', 'Draft marked ready for review'],
   ['reviewRequested', 'Review requested from me'],
   ['checksFailed', 'Checks failed on my pull request'],
+  ['approvalRequested', 'A deployment is waiting for my approval'],
   ['onlyMine', 'Only notify about runs and PRs that are mine']
 ]
 

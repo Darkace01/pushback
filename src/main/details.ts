@@ -87,6 +87,7 @@ export async function fetchPrDetail(gh: GitHub, repo: string, num: number): Prom
     mergeableState: pr.mergeable_state,
     labels: pr.labels.map((l) => ({ name: l.name, color: l.color })),
     requestedReviewers: pr.requested_reviewers.map((u) => u.login),
+    headSha: pr.head.sha,
     comments: timeline,
     commits: commits.map((c) => ({
       sha: c.sha,

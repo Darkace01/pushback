@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { PrDetail, PrFile, WorkflowRun } from '../../../shared/types'
+import type { PrDetail, WorkflowRun } from '../../../shared/types'
 import { timeAgo, useNow } from '../lib/format'
 import { webUrl } from '../lib/hosts'
 import { openInApp, openRepo } from '../lib/open'
@@ -9,6 +9,7 @@ import { approve } from '../widgets/PrsWidget'
 import { Markdown } from './Markdown'
 import { MergeStatus } from './MergeStatus'
 import { RepoRail } from './RepoRail'
+import { ReviewFiles } from './ReviewDiff'
 import { Avatar, Empty, Modal, runTone, Segmented, Skeleton, StatusIcon } from './ui'
 
 type Tab = 'conversation' | 'commits' | 'checks' | 'files'
@@ -121,7 +122,7 @@ export function PrModal({ repo, number }: { repo: string; number: number }) {
           {tab === 'conversation' && <Conversation pr={pr} onChange={load} />}
           {tab === 'commits' && <Commits pr={pr} />}
           {tab === 'checks' && <Checks pr={pr} />}
-          {tab === 'files' && <Files files={pr.files} total={pr.changedFiles} />}
+          {tab === 'files' && <ReviewFiles pr={pr} />}
         </>
       )}
     </Modal>
@@ -228,46 +229,5 @@ function Checks({ pr }: { pr: PrDetail }) {
           </li>
         ))}
     </ul>
-  )
-}
-
-function Files({ files, total }: { files: PrFile[]; total: number }) {
-  return (
-    <div className="files">
-      {total > files.length && <p className="dim small">Showing the first {files.length} of {total} files.</p>}
-      {files.map((f) => (
-        <FileDiff key={f.filename} file={f} />
-      ))}
-    </div>
-  )
-}
-
-function FileDiff({ file }: { file: PrFile }) {
-  const lines = file.patch?.split('\n') ?? []
-  // Big diffs start collapsed so the list stays scannable.
-  const [open, setOpen] = useState(lines.length > 0 && lines.length < 300)
-  return (
-    <div className="file">
-      <button className="file-head" onClick={() => setOpen(!open)}>
-        <span className="dim">{open ? '▾' : '▸'}</span>
-        <span className={`file-status file-${file.status}`}>{file.status}</span>
-        <span className="mono">{file.filename}</span>
-        <span className="spacer" />
-        <span className="add small">+{file.additions}</span>
-        <span className="del small">−{file.deletions}</span>
-      </button>
-      {open &&
-        (lines.length ? (
-          <pre className="diff">
-            {lines.map((l, i) => (
-              <div key={i} className={l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'ins' : l.startsWith('-') ? 'rem' : undefined}>
-                {l || ' '}
-              </div>
-            ))}
-          </pre>
-        ) : (
-          <p className="dim small file-note">No diff to show (binary, renamed, or too large).</p>
-        ))}
-    </div>
   )
 }
