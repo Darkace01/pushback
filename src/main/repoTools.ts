@@ -1,5 +1,5 @@
 import type { GitHub } from './github'
-import type { ActionResult, BranchInfo, CommitInfo, GraphCommit, IssueDetail, IssueSummary, Label, MergedPr, NewPr, NewRelease, PrComment, ReleaseDraft, ReleaseInfo } from '../shared/types'
+import type { ActionResult, BranchInfo, CommitInfo, GraphCommit, IssueDetail, IssueSummary, Label, MergedPr, Milestone, NewPr, NewRelease, PrComment, ReleaseDraft, ReleaseInfo } from '../shared/types'
 
 // GitHub tools for the repo workspace: issues, branches, commits, releases and creating PRs.
 // Everything here is fetched on demand when a section opens, never by the poller.
@@ -28,6 +28,7 @@ interface GhIssue {
   assignees: GhUser[] | null
   body_html?: string
   pull_request?: unknown
+  milestone?: { number: number; title: string } | null
 }
 
 const toLabel = (l: GhIssue['labels'][number]): Label => (typeof l === 'string' ? { name: l, color: '888888' } : { name: l.name, color: l.color, description: l.description })
@@ -45,12 +46,15 @@ function toIssue(repo: string, i: GhIssue): IssueSummary {
     updatedAt: i.updated_at,
     comments: i.comments,
     labels: i.labels.map(toLabel),
-    assignees: (i.assignees ?? []).map((a) => a.login)
+    assignees: (i.assignees ?? []).map((a) => a.login),
+    milestone: i.milestone ? { number: i.milestone.number, title: i.milestone.title } : null
   }
 }
 
-export async function listIssues(gh: GitHub, repo: string, state: 'open' | 'closed'): Promise<IssueSummary[]> {
-  const items = await gh.get<GhIssue[]>(`/repos/${repo}/issues?state=${state}&sort=updated&per_page=100`)
+export async function listIssues(gh: GitHub, repo: string, state: 'open' | 'closed', milestone?: number | 'none'): Promise<IssueSummary[]> {
+  // Filtering on GitHub's side, so a milestone's issues aren't cut off by the 100 most recently updated.
+  const only = milestone === 'none' ? '&milestone=none' : Number.isInteger(milestone) ? `&milestone=${milestone}` : ''
+  const items = await gh.get<GhIssue[]>(`/repos/${repo}/issues?state=${state}&sort=updated&per_page=100${only}`)
   // The issues endpoint also returns PRs; those have their own section.
   return items.filter((i) => !i.pull_request).map((i) => toIssue(repo, i))
 }
@@ -252,4 +256,41 @@ export async function releaseDraft(gh: GitHub, repo: string, base: string): Prom
     if (batch.length < 100 || Date.parse(batch[batch.length - 1].updated_at) < since) break
   }
   return { since: last?.tag_name ?? null, prs }
+}
+
+export interface GhMilestone {
+  number: number
+  title: string
+  description: string | null
+  state: 'open' | 'closed'
+  open_issues: number
+  closed_issues: number
+  due_on: string | null
+  closed_at: string | null
+  html_url: string
+}
+
+export const toMilestone = (m: GhMilestone): Milestone => ({
+  number: m.number,
+  title: m.title,
+  description: m.description || null,
+  state: m.state,
+  openIssues: m.open_issues,
+  closedIssues: m.closed_issues,
+  dueOn: m.due_on,
+  closedAt: m.closed_at,
+  url: m.html_url
+})
+
+/** Open milestones soonest due first (undated ones last); closed ones most recently closed first. */
+export async function listMilestones(gh: GitHub, repo: string, state: 'open' | 'closed'): Promise<Milestone[]> {
+  const list = await gh.get<GhMilestone[]>(`/repos/${repo}/milestones?state=${state}&sort=due_on&direction=asc&per_page=100`)
+  const milestones = list.map(toMilestone)
+  if (state === 'closed') return milestones.sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? ''))
+  return milestones.sort((a, b) => (a.dueOn ? Date.parse(a.dueOn) : Infinity) - (b.dueOn ? Date.parse(b.dueOn) : Infinity))
+}
+
+export async function setIssueMilestone(gh: GitHub, repo: string, num: number, milestone: number | null): Promise<void> {
+  if (milestone !== null && !(Number.isInteger(milestone) && milestone > 0)) throw new Error('Not a milestone number')
+  await gh.send('PATCH', `/repos/${repo}/issues/${num}`, { milestone })
 }

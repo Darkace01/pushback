@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, s
 import { cpSync, existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import type { AccountInfo, ActionResult, ActionsAdminAction, ActionsAdminKind, AppEvent, CleanupRequest, DispatchResult, NewAccount, EventKind, GitAction, GitQuery, Job, NewLineComment, NewPr, NewRelease, NotifySettings, RepoOption, ReviewEvent, Settings } from '../shared/types'
+import type {  AccountInfo, ActionResult, ActionsAdminAction, ActionsAdminKind, AppEvent, CleanupRequest, DispatchResult, NewAccount, EventKind, GitAction, GitQuery, Job, NewLineComment, NewPr, NewRelease, NotifySettings, RepoOption, ReviewEvent, Settings , ProjectStatusChange } from '../shared/types'
 import { fetchPrDetail, fetchRepoInfo } from './details'
 import { GitHub } from './github'
 import * as tools from './repoTools'
@@ -32,6 +32,8 @@ import { findTheme } from '../shared/themes'
 import { loadEvents, loadSettings, resolveToken, saveEvents, savePat, saveSettings } from './store'
 import { appIcon } from './icon'
 import { checkForUpdates, initUpdater, installUpdate, RELEASES_URL, updateStatus } from './updater'
+import { itemProjects, setProjectStatus } from './projects'
+import { commentDiscussion, discussionDetail, listDiscussions } from './discussions'
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -527,7 +529,7 @@ function registerIpc(): void {
     run(() => clientFor(repo).send('POST', `/repos/${repo}/issues/${num}/comments`, { body }), false)
   )
   ipcMain.handle('repo:info', (_e, repo: string) => fetchRepoInfo(clientFor(repo), repo))
-  ipcMain.handle('issues:list', (_e, repo: string, state: 'open' | 'closed') => tools.listIssues(clientFor(repo), repo, state))
+  ipcMain.handle('issues:list', (_e, repo: string, state: 'open' | 'closed', milestone?: number | 'none') => tools.listIssues(clientFor(repo), repo, state, milestone))
   ipcMain.handle('issue:detail', (_e, repo: string, num: number) => tools.issueDetail(clientFor(repo), repo, num))
   ipcMain.handle('issue:create', (_e, repo: string, issue: { title: string; body: string; labels: string[] }) =>
     create(() => tools.createIssue(clientFor(repo), repo, issue))
@@ -795,6 +797,16 @@ function registerIpc(): void {
       return { ok: false, error: (err as Error).message }
     }
   })
+  // --- milestones, projects (v2) and discussions: all on demand, GraphQL ones only when a view asks ---
+  ipcMain.handle('milestones:list', (_e, repo: string, state: 'open' | 'closed') => tools.listMilestones(clientFor(repo), repo, state === 'closed' ? 'closed' : 'open'))
+  ipcMain.handle('issue:milestone', (_e, repo: string, num: number, milestone: number | null) =>
+    run(() => tools.setIssueMilestone(clientFor(repo), repo, Number(num), milestone === null ? null : Number(milestone)), false)
+  )
+  ipcMain.handle('projects:item', (_e, repo: string, num: number) => itemProjects(clientFor(repo), repo, Number(num)))
+  ipcMain.handle('projects:status', (_e, repo: string, change: ProjectStatusChange) => run(() => setProjectStatus(clientFor(repo), change), false))
+  ipcMain.handle('discussions:list', (_e, repo: string) => listDiscussions(clientFor(repo), repo))
+  ipcMain.handle('discussion:detail', (_e, repo: string, num: number) => discussionDetail(clientFor(repo), repo, Number(num)))
+  ipcMain.handle('discussion:comment', (_e, repo: string, id: string, body: string) => run(() => commentDiscussion(clientFor(repo), String(id), String(body)), false))
   ipcMain.handle('editors:list', () => listEditors())
   ipcMain.handle('update:status', () => updateStatus())
   ipcMain.handle('update:check', () => checkForUpdates())

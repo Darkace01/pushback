@@ -3,6 +3,7 @@ import { closeModal, isPage, popTo, useModal, useTrail } from '../lib/ui'
 import { getSnapshot, useSettings } from '../lib/store'
 import { HOME, openRepoTab, useRepoSection } from '../lib/tabs'
 import { RunDetailsModal } from './ActionModals'
+import { DiscussionModal } from './DiscussionView'
 import { IssueModal } from './IssueView'
 import { MergeQueueModal } from './MergeQueue'
 import { PrModal } from './PrView'
@@ -10,7 +11,7 @@ import { SECTIONS } from './RepoWorkspace'
 import { WorkflowFileModal } from './WorkflowFile'
 import { Icon, PageMode } from './ui'
 
-type Page = NonNullable<ModalState> & ({ kind: 'pr' } | { kind: 'issue' } | { kind: 'run' } | { kind: 'merge-queue' } | { kind: 'workflow-file' })
+type Page = NonNullable<ModalState> & ({ kind: 'pr' } | { kind: 'issue' } | { kind: 'run' } | { kind: 'merge-queue' } | { kind: 'workflow-file' } | { kind: 'discussion' })
 
 const pageRepo = (p: Page) => (p.kind === 'run' ? p.run.repo : p.repo)
 
@@ -19,6 +20,7 @@ function pageLabel(p: Page): string {
   if (p.kind === 'issue') return `Issue #${p.number}`
   if (p.kind === 'merge-queue') return `Merge queue${p.branch ? ` (${p.branch})` : ''}`
   if (p.kind === 'workflow-file') return p.name ?? p.path.split('/').pop()!
+  if (p.kind === 'discussion') return `Discussion #${p.number}`
   const title = getSnapshot().repos[p.repo]?.prs.find((x) => x.number === p.number)?.title
   return `#${p.number}${title ? ` ${title}` : ''}`
 }
@@ -99,6 +101,8 @@ export function PageArea({ inRepo }: { inRepo?: string }) {
       <MergeQueueModal key={`${page.repo}@${page.branch ?? ''}`} repo={page.repo} branch={page.branch} />
     ) : page.kind === 'workflow-file' ? (
       <WorkflowFileModal key={`${page.repo}/${page.path}@${page.ref ?? ''}`} repo={page.repo} path={page.path} ref={page.ref} name={page.name} />
+    ) : page.kind === 'discussion' ? (
+      <DiscussionModal key={`${page.repo}#${page.number}`} repo={page.repo} number={page.number} />
     ) : (
       <RunDetailsModal key={page.run.id} run={page.run} />
     )

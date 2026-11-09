@@ -38,7 +38,7 @@ const api: PushbackApi = {
   prDetail: (repo, num) => ipcRenderer.invoke('pr:detail', repo, num),
   commentPr: (repo, num, body) => ipcRenderer.invoke('pr:comment', repo, num, body),
   repoInfo: (repo) => ipcRenderer.invoke('repo:info', repo),
-  listIssues: (repo, state) => ipcRenderer.invoke('issues:list', repo, state),
+  listIssues: (repo, state, milestone) => ipcRenderer.invoke('issues:list', repo, state, milestone),
   issueDetail: (repo, num) => ipcRenderer.invoke('issue:detail', repo, num),
   createIssue: (repo, issue) => ipcRenderer.invoke('issue:create', repo, issue),
   setIssueState: (repo, num, state, reason) => ipcRenderer.invoke('issue:state', repo, num, state, reason),
@@ -105,7 +105,15 @@ const api: PushbackApi = {
   // --- merge queue ---
   mergeQueue: (repo, branch) => ipcRenderer.invoke('merge-queue:get', repo, branch),
   // --- workflow files ---
-  workflowFile: (repo, path, ref) => ipcRenderer.invoke('workflow:file', repo, path, ref)
+  workflowFile: (repo, path, ref) => ipcRenderer.invoke('workflow:file', repo, path, ref),
+  // --- milestones, projects and discussions ---
+  listMilestones: (repo, state) => ipcRenderer.invoke('milestones:list', repo, state),
+  setIssueMilestone: (repo, num, milestone) => ipcRenderer.invoke('issue:milestone', repo, num, milestone),
+  itemProjects: (repo, num) => ipcRenderer.invoke('projects:item', repo, num),
+  setProjectStatus: (repo, change) => ipcRenderer.invoke('projects:status', repo, change),
+  listDiscussions: (repo) => ipcRenderer.invoke('discussions:list', repo),
+  discussionDetail: (repo, num) => ipcRenderer.invoke('discussion:detail', repo, num),
+  commentDiscussion: (repo, id, body) => ipcRenderer.invoke('discussion:comment', repo, id, body)
 }
 
 contextBridge.exposeInMainWorld('pushback', api)

@@ -3550,3 +3550,44 @@ button.crumb:hover {
 .tok-punct {
   color: var(--dim);
 }
+
+
+/* Milestones, projects and discussions */
+.milestone-bar {
+  height: 6px;
+  margin: 4px 0;
+  max-width: 420px;
+  border-radius: 3px;
+  background: var(--panel2);
+  overflow: hidden;
+}
+.milestone-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+}
+.projects-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-top: 6px;
+}
+.project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.discussion-group {
+  margin-bottom: 14px;
+}
+.discussion-group h3 {
+  margin: 8px 0 4px;
+}
+.comment.discussion-answer {
+  border-color: var(--ok);
+}
+.comment.discussion-reply {
+  margin: 8px 0 0 18px;
+  border-left: 2px solid var(--border);
+}

@@ -18,6 +18,7 @@ import { CleanupSection } from './Cleanup'
 import { BranchesSection, CommitsSection, IssuesSection, ReleasesSection } from './GitHubSections'
 import { CompareSection, ContributorsSection, FileHistorySection, GraphSection, RemotesSection, SearchSection, StashesSection, TagsSection } from './GitTools'
 import { DeploymentsSection } from './Deployments'
+import { DiscussionsSection } from './Discussions'
 import { CollapsibleFilterBar } from './FilterBar'
 import { LocalSection } from './LocalGit'
 import { Markdown } from './Markdown'
@@ -56,6 +57,7 @@ export const SECTIONS: Section[] = [
   { id: 'pulls', label: 'Pull requests', group: 'GitHub', widget: ['prs', PrsWidget] },
   { id: 'merge-queue', label: 'Merge queue', group: 'GitHub', component: MergeQueueSection },
   { id: 'issues', label: 'Issues', group: 'GitHub', component: IssuesSection },
+  { id: 'discussions', label: 'Discussions', group: 'GitHub', component: DiscussionsSection },
   { id: 'branches', label: 'Branches', group: 'GitHub', component: BranchesSection },
   { id: 'commits', label: 'Commits', group: 'GitHub', component: CommitsSection },
   { id: 'releases', label: 'Releases', group: 'GitHub', component: ReleasesSection },

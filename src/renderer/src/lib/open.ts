@@ -28,6 +28,9 @@ export function openInApp(url: string): void {
   const issue = rest.match(/^\/issues\/(\d+)/)
   if (issue) return pushModal({ kind: 'issue', repo, number: Number(issue[1]) })
 
+  const discussion = rest.match(/^\/discussions\/(\d+)/)
+  if (discussion) return pushModal({ kind: 'discussion', repo, number: Number(discussion[1]) })
+
   const run = rest.match(/^\/actions\/runs\/(\d+)/)
   if (run) {
     const found = getSnapshot().repos[repo]?.runs.find((r) => r.id === Number(run[1]))
@@ -42,3 +45,4 @@ export function openInApp(url: string): void {
 export const openPr = (repo: string, number: number) => pushModal({ kind: 'pr', repo, number })
 export const openIssue = (repo: string, number: number) => pushModal({ kind: 'issue', repo, number })
 export const openRepo = openRepoTab
+export const openDiscussion = (repo: string, number: number) => pushModal({ kind: 'discussion', repo, number })

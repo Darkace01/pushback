@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import type { BranchInfo, CommitInfo, GraphCommit } from '../../../shared/types'
+import { useState, type ReactNode } from 'react'
+import { dueLabel, milestoneProgress } from '../../../shared/collab'
+import type { BranchInfo, CommitInfo, GraphCommit, MilestoneRef } from '../../../shared/types'
 import { matches, timeAgo, useNow } from '../lib/format'
 import { webUrl } from '../lib/hosts'
 import { openIssue, openPr } from '../lib/open'
@@ -19,17 +20,66 @@ function Filter({ value, onChange, placeholder }: { value: string; onChange: (v:
   return <input className="ws-filter" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
 }
 
+type MilestonePick = MilestoneRef | 'none' | null
+
 export function IssuesSection({ repo }: SectionProps) {
   const now = useNow()
+  const [view, setView] = useState<'issues' | 'milestones'>('issues')
   const [state, setState] = useState<'open' | 'closed'>('open')
   const [q, setQ] = useState('')
-  const { data, error } = useLoad(repo, () => api.listIssues(repo, state), [state])
-  const issues = data?.filter((i) => !q || matches(`#${i.number} ${i.title} ${i.author} ${i.labels.map((l) => l.name).join(' ')}`, q))
+  const [milestone, setMilestone] = useState<MilestonePick>(null)
+  const only = milestone === 'none' ? 'none' : milestone?.number
+  const { data, error } = useLoad(repo, () => (view === 'issues' ? api.listIssues(repo, state, only) : new Promise<never>(() => {})), [state, only, view])
+  const { data: milestones } = useLoad(repo, () => api.listMilestones(repo, 'open'), [])
+  const issues = data?.filter((i) => !q || matches(`#${i.number} ${i.title} ${i.author} ${i.labels.map((l) => l.name).join(' ')} ${i.milestone?.title ?? ''}`, q))
+  // A closed milestone picked from the milestones list isn't among the open ones, but must stay selectable.
+  const picked = milestone && milestone !== 'none' && !milestones?.some((m) => m.number === milestone.number) ? [milestone] : []
+  const choices: MilestoneRef[] = [...(milestones ?? []), ...picked]
+
+  const viewSwitch = (
+    <Segmented
+      value={view}
+      onChange={setView}
+      options={[
+        ['issues', 'Issues'],
+        ['milestones', `Milestones${milestones?.length ? ` ${milestones.length}` : ''}`]
+      ]}
+    />
+  )
+  if (view === 'milestones')
+    return (
+      <MilestonesList
+        repo={repo}
+        toolbar={viewSwitch}
+        onPick={(m) => {
+          setMilestone({ number: m.number, title: m.title })
+          setState('open')
+          setView('issues')
+        }}
+      />
+    )
 
   return (
     <>
       <div className="ws-toolbar">
+        {viewSwitch}
         <Segmented value={state} onChange={setState} options={[['open', 'Open'], ['closed', 'Closed']]} />
+        <select
+          aria-label="Milestone"
+          value={milestone === 'none' ? 'none' : (milestone?.number ?? '')}
+          onChange={(e) => {
+            const v = e.target.value
+            setMilestone(v === '' ? null : v === 'none' ? 'none' : (choices.find((m) => m.number === Number(v)) ?? null))
+          }}
+        >
+          <option value="">Any milestone</option>
+          <option value="none">No milestone</option>
+          {choices.map((m) => (
+            <option key={m.number} value={m.number}>
+              {m.title}
+            </option>
+          ))}
+        </select>
         <Filter value={q} onChange={setQ} placeholder="Filter issues…" />
         <span className="spacer" />
         <button className="btn btn-primary btn-sm" onClick={() => pushModal({ kind: 'new-issue', repo })}>
@@ -39,7 +89,7 @@ export function IssuesSection({ repo }: SectionProps) {
       {!issues ? (
         <Loading error={error} />
       ) : !issues.length ? (
-        <Empty>{q ? 'No issues match.' : state === 'open' ? 'No open issues. 🎉' : 'No closed issues.'}</Empty>
+        <Empty>{q || milestone ? 'No issues match.' : state === 'open' ? 'No open issues. 🎉' : 'No closed issues.'}</Empty>
       ) : (
         <ul className="list repo-tab">
           {issues.map((i) => (
@@ -59,12 +109,71 @@ export function IssuesSection({ repo }: SectionProps) {
                   <Avatar src={i.authorAvatar} login={i.author} size={14} />
                   <span>{i.author}</span>
                   {i.assignees.length > 0 && <span>→ {i.assignees.join(', ')}</span>}
+                  {i.milestone && <span title="Milestone">⚑ {i.milestone.title}</span>}
                   {i.comments > 0 && <span>💬 {i.comments}</span>}
                 </div>
               </div>
               <span className="dim small">{timeAgo(i.updatedAt, now)}</span>
             </li>
           ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+/** Milestones with how far along they are; picking one lists its issues. */
+function MilestonesList({ repo, toolbar, onPick }: { repo: string; toolbar: ReactNode; onPick: (m: MilestoneRef) => void }) {
+  const now = useNow()
+  const [state, setState] = useState<'open' | 'closed'>('open')
+  const { data, error } = useLoad(repo, () => api.listMilestones(repo, state), [state])
+
+  return (
+    <>
+      <div className="ws-toolbar">
+        {toolbar}
+        <Segmented value={state} onChange={setState} options={[['open', 'Open'], ['closed', 'Closed']]} />
+        <span className="spacer" />
+        <button className="btn btn-sm" onClick={() => void api.openExternal(webUrl(repo, '/milestones/new'))}>
+          New milestone
+        </button>
+      </div>
+      {!data ? (
+        <Loading error={error} />
+      ) : !data.length ? (
+        <Empty>{state === 'open' ? 'No open milestones.' : 'No closed milestones.'}</Empty>
+      ) : (
+        <ul className="list repo-tab milestones">
+          {data.map((m) => {
+            const pct = milestoneProgress(m)
+            const due = dueLabel(m.dueOn, now)
+            return (
+              <li key={m.number} className="row clickable" onClick={() => onPick(m)}>
+                <div className="row-main">
+                  <div className="row-title">
+                    <span className="strong">{m.title}</span>
+                    {m.state === 'closed' ? (
+                      <span className="badge badge-muted">Closed{m.closedAt ? ` ${timeAgo(m.closedAt, now)}` : ''}</span>
+                    ) : (
+                      <span className={`badge ${due.overdue ? 'badge-bad' : 'badge-muted'}`}>{due.text}</span>
+                    )}
+                  </div>
+                  <div className="milestone-bar" role="progressbar" aria-label={`${m.title} progress`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                    <span style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="row-meta">
+                    <span className="strong">{pct}% complete</span>
+                    <span>{m.openIssues} open</span>
+                    <span>{m.closedIssues} closed</span>
+                    {m.description && <span className="dim">{m.description}</span>}
+                  </div>
+                </div>
+                <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                  <IconButton icon="external" title="Open on GitHub" onClick={() => void api.openExternal(m.url)} />
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </>
