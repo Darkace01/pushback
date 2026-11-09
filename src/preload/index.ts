@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { PushbackApi, Settings, Snapshot, UpdateStatus } from '../shared/types'
+import type { PushbackApi, Settings, Snapshot, UpdateStatus, WatchedRun } from '../shared/types'
 
 function subscribe<T>(channel: string, cb: (value: T) => void): () => void {
   const listener = (_e: IpcRendererEvent, value: T) => cb(value)
@@ -85,7 +85,16 @@ const api: PushbackApi = {
   listPackages: (owner) => ipcRenderer.invoke('packages:list', owner),
   listPackageOrgs: () => ipcRenderer.invoke('packages:orgs'),
   packageVersions: (owner, type, name) => ipcRenderer.invoke('packages:versions', owner, type, name),
-  onNavigate: (cb) => subscribe<string>('navigate', cb)
+  onNavigate: (cb) => subscribe<string>('navigate', cb),
+  // --- reviewers ---
+  prReviewers: (repo, num) => ipcRenderer.invoke('pr:reviewers', repo, num),
+  requestReviewers: (repo, num, names, remove) => ipcRenderer.invoke('pr:request-reviewers', repo, num, names, remove),
+  // --- watched runs ---
+  watchRun: (repo, runId) => ipcRenderer.invoke('watch:add', repo, runId),
+  unwatchRun: (repo, runId) => ipcRenderer.invoke('watch:remove', repo, runId),
+  listWatched: () => ipcRenderer.invoke('watch:list'),
+  onWatched: (cb) => subscribe<WatchedRun[]>('watched', cb),
+  showWatched: (repo, runId) => ipcRenderer.invoke('watch:show', repo, runId)
 }
 
 contextBridge.exposeInMainWorld('pushback', api)

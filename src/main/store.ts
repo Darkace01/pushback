@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path'
 import { DEFAULT_SETTINGS } from '../shared/defaults'
 import { normalizeNotifyRules } from '../shared/notifyRules'
+import { normalizeDigest } from '../shared/digest'
 import { cleanSavedSearches } from '../shared/search'
 import type { AppEvent, Settings } from '../shared/types'
 
@@ -58,6 +59,7 @@ export function normalizeSettings(saved: Partial<Settings> & { theme?: string; a
   if (settings.activeAccount !== 'primary' && !known.has(settings.activeAccount)) settings.activeAccount = 'primary'
   // Added in 0.10: absent in older files, and hand-editable, so keep only well-formed entries.
   settings.savedSearches = cleanSavedSearches(rest.savedSearches)
+  settings.digest = normalizeDigest(rest.digest)
   settings.openTabs = settings.openTabs.filter((t) => !settings.pinnedTabs.includes(t))
   if (settings.activeTab !== 'home' && ![...settings.openTabs, ...settings.pinnedTabs].includes(settings.activeTab)) settings.activeTab = 'home'
   return settings
@@ -113,4 +115,14 @@ export async function resolveToken(): Promise<{ token: string; source: 'pat' | '
   if (pat) return { token: pat, source: 'pat' }
   const gh = await ghCliToken()
   return gh ? { token: gh, source: 'gh' } : null
+}
+
+/** When the last daily digest was shown (epoch ms). Kept apart from settings so the renderer never overwrites it. */
+export function loadLastDigest(): number {
+  const v = readJson<{ lastDaily?: unknown }>('digest.json', {}).lastDaily
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0
+}
+
+export function saveLastDigest(lastDaily: number): void {
+  writeJson('digest.json', { lastDaily })
 }

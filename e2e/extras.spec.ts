@@ -123,3 +123,23 @@ test('a saved search is pinned as a widget, shows PRs from untracked orgs, filte
   await dialog.getByRole('button', { name: 'Save search' }).click()
   await expect.poll(() => savedSettings(ctx).savedSearches).toEqual([expect.objectContaining({ name: 'Globex issues', kind: 'issue', query: 'is:open org:globex' })])
 })
+
+test('watching a run opens an always-on-top mini window with its current step, and closing it stops watching', async () => {
+  ctx = await launch({ settings: WATCHING })
+  const { app, page } = ctx
+  const runs = page.locator('.widget', { has: page.getByRole('heading', { name: 'Workflow runs' }) })
+  await runs.getByText('Build site').click()
+  const opened = app.waitForEvent('window')
+  await page.getByRole('button', { name: 'Watch', exact: true }).click()
+  const mini = await opened
+
+  await expect(mini.getByText('Watching 1 run')).toBeVisible()
+  // The run's current job and step, from its jobs.
+  await expect(mini.locator('.mini-run')).toContainText('build › Compile site')
+  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((w) => w.isAlwaysOnTop()).length)).toBe(1)
+  await expect(page.getByRole('button', { name: 'Watching' })).toBeVisible()
+
+  await mini.getByRole('button', { name: 'Stop watching and close' }).click()
+  await expect.poll(() => app.windows().length).toBe(1)
+  await expect(page.getByRole('button', { name: 'Watch', exact: true })).toBeVisible()
+})

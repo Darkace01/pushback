@@ -1,5 +1,6 @@
 import { RepoRail } from './RepoRail'
 import { RunDeployments } from './Deployments'
+import { WatchButton } from './Watch'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Job, PullRequest, ReviewEvent, Workflow, WorkflowRun } from '../../../shared/types'
 import { duration, timeAgo, useNow } from '../lib/format'
@@ -250,6 +251,7 @@ export function RunDetailsModal({ run: initial }: { run: WorkflowRun }) {
             Re-run all jobs
           </button>
         )}
+        <WatchButton run={run} />
         <span className="spacer" />
         <button className="btn" onClick={() => void navigator.clipboard.writeText(run.url).then(() => toast('Link copied', 'ok'))}>
           Copy link

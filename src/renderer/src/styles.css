@@ -3234,3 +3234,118 @@ button.crumb:hover {
 .cleanup-failures {
   margin-top: 10px;
 }
+
+/* ---------- watched runs ---------- */
+.btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mini {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+  overflow: hidden;
+}
+/* The mini window has no frame: its header is the drag handle. */
+.mini-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.mini-head button,
+.mini-run button {
+  -webkit-app-region: no-drag;
+}
+.mini-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  flex: 1;
+}
+.mini-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px 6px 8px;
+  border-radius: 6px;
+}
+.mini-run:hover {
+  background: var(--hover);
+}
+.mini-done.mini-ok {
+  box-shadow: inset 3px 0 0 var(--ok);
+}
+.mini-done.mini-bad {
+  box-shadow: inset 3px 0 0 var(--bad);
+}
+.mini-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mini-title,
+.mini-meta {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mini-meta {
+  font-size: 0.9em;
+}
+
+/* ---------- reviewers ---------- */
+.reviewers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.reviewer-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.reviewer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+.reviewer .icon-btn {
+  width: 20px;
+  height: 20px;
+}
+.reviewer-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reviewer-picker .list {
+  max-height: 260px;
+  overflow-y: auto;
+}

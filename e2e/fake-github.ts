@@ -117,6 +117,14 @@ const deployment = (id: number, environment: string, runId: number, sha: string,
 })
 
 function graphql(query: string, vars: Record<string, string>, rich: boolean) {
+  // Reviewer suggestions: carol reviewed recent PRs, and these people can be requested.
+  if (query.includes('assignableUsers'))
+    return {
+      repository: {
+        pullRequests: { nodes: [{ reviews: { nodes: [{ author: { login: 'carol' } }, { author: { login: 'carol' } }] } }] },
+        assignableUsers: { nodes: [{ login: 'alice' }, { login: 'bob' }, { login: 'carol' }, { login: 'dave' }, { login: 'octo' }] }
+      }
+    }
   if (query.includes('reviewRequests: search')) {
     const node = { ...pr(7, {}), repository: { nameWithOwner: 'acme/api' } }
     return { viewer: { login: 'octo', avatarUrl: '' }, reviewRequests: { nodes: [node] }, myPrs: { nodes: [] }, assigned: { nodes: [] } }
@@ -284,7 +292,29 @@ function rest(path: string, rich: boolean, enterprise = false): unknown {
           : []
     }
   if (p.endsWith('/contents/.github/workflows/deploy.yml')) return { content: Buffer.from(DEPLOY_YAML).toString('base64') }
+  if (p === '/repos/acme/api/contents/.github/CODEOWNERS') return { content: Buffer.from('* @octo\n/src/ @bob @acme/frontend\n').toString('base64') }
+  if (p.match(/\/pulls\/\d+\/requested_reviewers$/)) return { users: [user('octo')], teams: [] }
+  if ((m = p.match(/^\/repos\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)$/))) return (RUNS[m[1]] as { id: number }[] | undefined)?.find((r) => r.id === Number(m![2]))
   if (p.endsWith('/contents/.github/workflows/ci.yml')) return { content: Buffer.from('on: push\n').toString('base64') }
+  // acme/web's run 201 is still going: its build job is part-way through, for the watched-run window.
+  if (p === '/repos/acme/web/actions/runs/201/jobs')
+    return {
+      jobs: [
+        {
+          id: 2010,
+          name: 'build',
+          status: 'in_progress',
+          conclusion: null,
+          started_at: ago(2),
+          completed_at: null,
+          html_url: '',
+          steps: [
+            { name: 'Checkout', status: 'completed', conclusion: 'success', number: 1 },
+            { name: 'Compile site', status: 'in_progress', conclusion: null, number: 2 }
+          ]
+        }
+      ]
+    }
   if ((m = p.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/jobs$/)))
     return {
       jobs: [
@@ -445,6 +475,11 @@ export async function startFakeGitHub(opts: { rich?: boolean; enterprise?: boole
     // Submitting a review is the one REST write the app is allowed to make in tests that ask for it.
     if (req.method === 'POST' && /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+\/reviews$/.test(path)) {
       res.writeHead(200, headers).end(JSON.stringify({ id: 1 }))
+      return
+    }
+    if (req.method === 'POST' && /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+\/requested_reviewers$/.test(path)) {
+      bodies.push({ method: 'POST', path, body: JSON.parse(text || '{}') })
+      res.writeHead(201, headers).end('{}')
       return
     }
     if (req.method === 'POST' && /^\/repos\/[^/]+\/[^/]+\/releases$/.test(path)) {

@@ -82,7 +82,8 @@ export const DEFAULT_SETTINGS: Settings = {
   accounts: [],
   repoAccounts: {},
   activeAccount: 'primary',
-  savedSearches: []
+  savedSearches: [],
+  digest: { afterQuiet: false, daily: false, dailyAt: '09:00' }
 }
 
 /**

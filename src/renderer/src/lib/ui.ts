@@ -22,6 +22,7 @@ export type ModalState =
   | { kind: 'import-dashboard' }
   | { kind: 'saved-searches' }
   | { kind: 'find-clones' }
+  | { kind: 'activity' }
   | null
 
 let modal: ModalState = null

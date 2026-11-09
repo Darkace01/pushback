@@ -94,3 +94,46 @@ test('quiet hours, snooze and muted repos are saved from Settings', async () => 
   await expect.poll(() => savedSettings(ctx).notifyRules.snoozedUntil).toBe(0)
   expect(gh.writes()).toEqual([])
 })
+
+test('request review suggests code owners and recent reviewers, then requests and removes reviewers', async () => {
+  ctx = await launch({ settings: WATCHING })
+  const { page, gh } = ctx
+  await openPr(page)
+  const reviewers = page.getByRole('region', { name: 'Reviewers' })
+  await expect(reviewers.getByTitle('Waiting on octo')).toBeVisible()
+  await reviewers.getByRole('button', { name: 'Request review' }).click()
+
+  // CODEOWNERS gives /src/ to bob and the acme/frontend team; carol reviewed recent PRs.
+  const bob = reviewers.getByRole('listitem', { name: 'Request bob' })
+  await expect(bob).toContainText('Code owner of 1 changed file')
+  await expect(reviewers.getByRole('listitem', { name: 'Request acme/frontend' })).toContainText('team')
+  await expect(reviewers.getByRole('listitem', { name: 'Request carol' })).toContainText('Reviewed 2 recent PRs')
+  await expect(reviewers.getByRole('listitem', { name: 'Request dave' })).toContainText('Collaborator')
+  // Not the author, and not someone already requested.
+  await expect(reviewers.getByRole('listitem', { name: 'Request alice' })).toHaveCount(0)
+  await expect(reviewers.getByRole('listitem', { name: 'Request octo' })).toHaveCount(0)
+
+  await bob.click()
+  await expect.poll(() => gh.writes().length).toBe(1)
+  expect(gh.writes()[0]).toMatchObject({ method: 'POST', path: '/repos/acme/api/pulls/7/requested_reviewers' })
+  expect(JSON.parse(gh.writes()[0].body ?? '{}')).toEqual({ reviewers: ['bob'], team_reviewers: [] })
+
+  await reviewers.getByRole('button', { name: 'Remove octo' }).click()
+  await expect.poll(() => gh.writes().length).toBe(2)
+  expect(gh.writes()[1]).toMatchObject({ method: 'DELETE', path: '/repos/acme/api/pulls/7/requested_reviewers' })
+  expect(JSON.parse(gh.writes()[1].body ?? '{}')).toEqual({ reviewers: ['octo'], team_reviewers: [] })
+})
+
+test('the digest options are saved from Settings', async () => {
+  ctx = await launch({ settings: WATCHING })
+  const { page, gh } = ctx
+  await expect(page.locator('.widget').first()).toBeVisible()
+  await page.getByTitle(/Settings/).click()
+  await page.getByRole('tab', { name: 'Notifications' }).or(page.getByRole('button', { name: 'Notifications' })).first().click()
+
+  await page.getByLabel('Summarise what I missed when quiet hours or a snooze end').check()
+  await page.getByLabel('Send a daily digest').check()
+  await page.getByLabel('Daily digest time').fill('17:45')
+  await expect.poll(() => savedSettings(ctx).digest).toEqual({ afterQuiet: true, daily: true, dailyAt: '17:45' })
+  expect(gh.writes()).toEqual([])
+})

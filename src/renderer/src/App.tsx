@@ -11,6 +11,7 @@ import { IssueModal } from './components/IssueView'
 import { RepoWorkspace } from './components/RepoWorkspace'
 import { Breadcrumbs, PageArea } from './components/Breadcrumbs'
 import { FindClonesModal } from './components/FindClones'
+import { ActivityModal, ACTIVITY_TARGET } from './components/Activity'
 import { RepoSidebar, TabBar } from './components/Tabs'
 import { Tour } from './components/Tour'
 import { AccountSection, ReposSection, SettingsModal } from './components/SettingsModal'
@@ -220,6 +221,8 @@ function Modals() {
       return <SavedSearchesModal />
     case 'find-clones':
       return <FindClonesModal />
+    case 'activity':
+      return <ActivityModal />
   }
 }
 
@@ -229,7 +232,8 @@ export function App() {
   useApplyAppearance()
   useShortcuts()
   useEffect(() => closeModal, [])
-  useEffect(() => api.onNavigate(openInApp), [])
+  // A digest notification asks for Activity; every other click opens a GitHub link.
+  useEffect(() => api.onNavigate((url) => (url === ACTIVITY_TARGET ? openModal({ kind: 'activity' }) : openInApp(url))), [])
 
   // Until the first poll answers, auth reads as missing; show the dashboard's skeleton rather than flashing sign-in.
   const starting = !snapshot.lastPoll && settings.repos.length > 0
