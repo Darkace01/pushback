@@ -35,9 +35,12 @@ describe('summarize', () => {
   })
 
   it('counts kinds it has no wording for as other updates instead of dropping them', () => {
-    const d = summarize([event('run-failure'), event('deploy-approval' as EventKind), event('something-new' as EventKind)])
+    const d = summarize([event('run-failure'), event('another-new' as EventKind), event('something-new' as EventKind)])
     expect(d?.body).toBe('1 run failed, 2 other updates.')
     expect(d?.count).toBe(3)
+  })
+  it('puts deployments waiting for approval first', () => {
+    expect(summarize([event('run-failure'), event('deploy-approval')])?.body).toBe('1 deployment needs your approval, 1 run failed.')
   })
 })
 
