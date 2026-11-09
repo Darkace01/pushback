@@ -82,7 +82,7 @@ export const CommitGraph = memo(function CommitGraph({ commits, selected, onSele
             </span>
             <span className="graph-author" title={c.email ?? c.author}>
               {c.avatar && <Avatar src={c.avatar} login={c.author} size={16} />}
-              {c.author}
+              <span className="graph-author-name">{c.author}</span>
             </span>
             <span className="graph-date" title={new Date(c.date).toLocaleString()}>
               {timeAgo(c.date, now)}
