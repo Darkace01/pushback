@@ -130,7 +130,8 @@ test('the digest options are saved from Settings', async () => {
   const { page, gh } = ctx
   await expect(page.locator('.widget').first()).toBeVisible()
   await page.getByTitle(/Settings/).click()
-  await page.getByRole('tab', { name: 'Notifications' }).or(page.getByRole('button', { name: 'Notifications' })).first().click()
+  const dialog = page.locator('.modal-backdrop')
+  await dialog.getByRole('tab', { name: 'Notifications' }).or(dialog.getByRole('button', { name: 'Notifications' })).first().click()
 
   await page.getByLabel('Summarise what I missed when quiet hours or a snooze end').check()
   await page.getByLabel('Send a daily digest').check()

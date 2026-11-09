@@ -41,7 +41,8 @@ test('the merge queue opens from a PR, lists every entry in order, and opens the
   await expect(entries.nth(1)).toContainText('Bump lodash')
   await expect(entries.nth(1)).toContainText('Awaiting checks')
   await expect(entries.nth(1)).toContainText('dependabot')
-  await expect(entries.nth(1)).toContainText('queued 20m ago by bob')
+  // The fake's timestamps are fixed when the suite starts, so this drifts by however long the suite has been running.
+  await expect(entries.nth(1)).toContainText(/queued 2\dm ago by bob/)
   await expect(entries.nth(1)).toContainText('about 5 min to merge')
   await expect(entries.nth(2)).toContainText('Unmergeable')
   await expect(entries.nth(2)).not.toContainText('to merge')
